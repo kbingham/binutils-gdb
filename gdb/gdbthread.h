@@ -635,6 +635,10 @@ extern void validate_registers_access (void);
    true iff we ever detected multiple threads.  */
 extern int show_thread_that_caused_stop (void);
 
+/* Update the INFERIOR_PTID to a suitable thread depending on the
+   target capabilities.  */
+extern void update_inferior_thread (int force);
+
 extern struct thread_info *thread_list;
 
 #endif /* GDBTHREAD_H */

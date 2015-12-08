@@ -90,6 +90,43 @@ inferior_thread (void)
   return tp;
 }
 
+/* Adjust current thread depending on target capability. */
+
+void
+update_inferior_thread (int force)
+{
+  ptid_t wait_ptid;
+  struct target_waitstatus wait_status;
+
+  /* Get the last target status returned by target_wait().  */
+  get_last_target_status (&wait_ptid, &wait_status);
+
+  /* Switch to WAIT_PID if target unable to control threads and thread is not
+     the stopped thread nor a thread running on a core.  */
+  if (!ptid_equal (wait_ptid, minus_one_ptid)
+      && !ptid_equal (inferior_ptid, wait_ptid)
+      && target_core_of_thread (inferior_ptid) == -1
+      && !target_can_lock_scheduler)
+    {
+      if (!force)
+	{
+	  if (!query(
+_("Selected thread %d (%s) is not scheduled and cannot be started.\n\
+Switch to scheduled thread %d (%s)? "),
+		     ptid_to_global_thread_id(inferior_ptid),
+		     target_pid_to_str (inferior_ptid),
+		     ptid_to_global_thread_id (wait_ptid),
+		     target_pid_to_str (wait_ptid)))
+	    error(_("Cancelled"));
+	}
+
+      printf_filtered (_("[Switching to thread %d (%s)]\n"),
+		       ptid_to_global_thread_id (wait_ptid),
+		       target_pid_to_str (wait_ptid));
+      switch_to_thread (wait_ptid);
+    }
+}
+
 /* Delete the breakpoint pointed at by BP_P, if there's one.  */
 
 static void

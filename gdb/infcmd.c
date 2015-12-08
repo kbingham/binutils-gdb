@@ -795,6 +795,9 @@ continue_command (char *args, int from_tty)
     error (_("Can't resume all threads and specify "
 	     "proceed count simultaneously."));
 
+  /* Update the inferior thread if required */
+  update_inferior_thread (1);
+
   /* If we have an argument left, set proceed count of breakpoint we
      stopped at.  */
   if (args != NULL)
@@ -991,6 +994,9 @@ step_1 (int skip_subroutines, int single_inst, char *count_string)
   prepare_execution_command (&current_target, async_exec);
 
   count = count_string ? parse_and_eval_long (count_string) : 1;
+
+  /* Update the inferior thread if required */
+  update_inferior_thread (0);
 
   /* Done with ARGS.  */
   do_cleanups (args_chain);
@@ -1201,6 +1207,9 @@ jump_command (char *arg, int from_tty)
     error (_("No source file has been specified."));
 
   resolve_sal_pc (&sal);	/* May error out.  */
+
+  /* Update the inferior thread if required */
+  update_inferior_thread (0);
 
   /* See if we are trying to jump to another function.  */
   fn = get_frame_function (get_current_frame ());
@@ -1544,6 +1553,9 @@ until_command (char *arg, int from_tty)
 
   prepare_execution_command (&current_target, async_exec);
 
+  /* Update the inferior thread if required */
+  update_inferior_thread (0);
+
   if (arg)
     until_break_command (arg, from_tty, 0);
   else
@@ -1572,6 +1584,9 @@ advance_command (char *arg, int from_tty)
   args_chain = make_cleanup (xfree, arg);
 
   prepare_execution_command (&current_target, async_exec);
+
+  /* Update the inferior thread if required */
+  update_inferior_thread (0);
 
   until_break_command (arg, from_tty, 1);
 
@@ -1955,6 +1970,9 @@ finish_command (char *arg, int from_tty)
   if (arg)
     error (_("The \"finish\" command does not take any arguments."));
 
+  /* Update the inferior thread if required */
+  update_inferior_thread (0);
+
   /* Done with ARGS.  */
   do_cleanups (args_chain);
 
@@ -2056,6 +2074,10 @@ program_info (char *args, int from_tty)
       struct target_waitstatus ws;
 
       get_last_target_status (&ptid, &ws);
+
+      /* Check if invalid and if so set to inferior PTID.  */
+      if (ptid_equal (ptid, minus_one_ptid))
+	ptid = inferior_ptid;
     }
 
   if (ptid_equal (ptid, null_ptid) || is_exited (ptid))
