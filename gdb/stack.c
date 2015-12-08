@@ -116,6 +116,15 @@ static CORE_ADDR last_displayed_addr = 0;
 static struct symtab *last_displayed_symtab = 0;
 static int last_displayed_line = 0;
 
+static int print_frame_id = 0;
+
+static void
+show_print_frame_id (struct ui_file *file, int from_tty,
+		    struct cmd_list_element *c, const char *value)
+{
+  fprintf_filtered (file, _("Display of the frame id when stepping is %s.\n"), value);
+}
+
 
 /* Return 1 if we should display the address in addition to the location,
    because we are in the middle of a statement.  */
@@ -1266,6 +1275,39 @@ print_frame (struct frame_info *frame, int print_level,
 	}
     }
 
+
+  /* Print a string that represents the frame_id. This could be used by the UI
+     for comparison with the previous frame_id.
+     This is printed only on MI output for step stop reason and when the 
+     "set print frame-id" command is on.  */
+  if (print_frame_id && ui_out_is_mi_like_p (uiout))
+    {
+      struct frame_id this_frame_id;
+      struct cleanup *frame_id_list_chain;
+      struct thread_info *tp;
+      int stop_step = 0;
+
+      if (target_has_execution)
+        {
+          tp = inferior_thread ();
+          stop_step = tp->control.stop_step;
+        }
+
+      if (stop_step)
+        {
+          frame_id_list_chain = make_cleanup_ui_out_tuple_begin_end (uiout, "id");
+          this_frame_id= get_frame_id (frame);
+
+          ui_out_field_string (uiout, "stack", this_frame_id.stack_addr ?
+            hex_string (this_frame_id.stack_addr) : "false");
+          ui_out_field_string (uiout, "code", this_frame_id.code_addr_p ? 
+            hex_string (this_frame_id.code_addr) : "false");
+          ui_out_field_string (uiout, "special", this_frame_id.special_addr_p ? 
+            hex_string (this_frame_id.special_addr) : "false");
+
+          do_cleanups (frame_id_list_chain);
+        }
+    }
   /* do_cleanups will call ui_out_tuple_end() for us.  */
   do_cleanups (list_chain);
   ui_out_text (uiout, "\n");
@@ -2686,4 +2728,13 @@ in addition to their current values.  This option tells GDB whether\n\
 to print the current value, the value at entry (marked as val@entry),\n\
 or both.  Note that one or both of these values may be <optimized out>."),
 			NULL, NULL, &setprintlist, &showprintlist);
+
+  add_setshow_boolean_cmd ("frame-id", class_stack, &print_frame_id, _("\
+Set the frame id MI printing mode."), _("\
+Show the frame id MI printing mode."), _("\
+Set the printing of the frame ID into the MI output.\n\
+The frame id is printed only if stop reason is end-stepping-range."),
+			   NULL,
+			   show_print_frame_id,
+			   &setprintlist, &showprintlist);
 }
