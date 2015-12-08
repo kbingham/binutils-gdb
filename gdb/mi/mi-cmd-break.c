@@ -39,6 +39,8 @@ enum
     FROM_TTY = 0
   };
 
+extern enum auto_boolean pending_break_support;
+
 /* True if MI breakpoint observers have been registered.  */
 
 static int mi_breakpoint_observers_installed;
@@ -268,6 +270,10 @@ mi_cmd_break_insert_1 (int dprintf, char *command, char **argv, int argc)
 	  break;
 	}
     }
+
+  /* Respect "set breakpoint pending" */
+  if (pending_break_support != AUTO_BOOLEAN_FALSE)
+    pending = 1;
 
   if (oind >= argc && !is_explicit)
     error (_("-%s-insert: Missing <location>"),
