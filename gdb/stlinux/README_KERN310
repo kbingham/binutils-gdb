@@ -1,0 +1,25 @@
+Kernel sti-3.10 support, sniff tests on 2014-may-15
+---------------------------------------------------
+
+* As we release hotfixes for now, some features are broken
+* we here list the current ok/ko status.
+
+
+debug_process -- not working, no automated userland unwinding.
+dmesg -- FIXED for KERNEL 310.
+pgtable --  not working, no manual walkthrough of descriptors from  phys to virt addresses.
+pmap -- FIXED for kernel 310
+proc_cmdline -- OK
+proc_interrupts -- OK
+proc_iomem -- OK
+proc_ioports -- OK
+proc_meminfo -- OK
+proc_mounts -- OK
+proc_version -- OK
+process_info -- OK
+running_task -- OK, but needs an update to provide the core#, not super useful in fact.
+st -- depends on SHTDI, assuming OK, st mmu on/off OK
+vm_translate -- OK
+wait-exe-uid -- Android helper feature, needs more testing.
+wait_exe -- OK also seems to resume unexpectedly is process symbol path not resolved, need more testing.
+

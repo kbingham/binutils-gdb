@@ -92,12 +92,14 @@ struct target_so_ops *current_target_so_ops;
 /* List of known shared objects */
 #define so_list_head current_program_space->so_list
 
+static int solib_enabled = 1;		/* Shared libraries enabled ? */
+
 /* Local function prototypes */
 
 /* If non-empty, this is a search path for loading non-absolute shared library
    symbol files.  This takes precedence over the environment variables PATH
    and LD_LIBRARY_PATH.  */
-static char *solib_search_path = NULL;
+/*static*/ char *solib_search_path = NULL;
 static void
 show_solib_search_path (struct ui_file *file, int from_tty,
 			struct cmd_list_element *c, const char *value)
@@ -991,7 +993,8 @@ solib_add (const char *pattern, int from_tty,
 	error (_("Invalid regexp: %s"), re_err);
     }
 
-  update_solib_list (from_tty, target);
+  if (solib_enabled)
+    update_solib_list (from_tty, target);
 
   /* Walk the list of currently loaded shared libraries, and read
      symbols for any that match the pattern --- or any whose symbols
@@ -1076,7 +1079,8 @@ info_sharedlibrary_command (char *pattern, int from_tty)
   /* "0x", a little whitespace, and two hex digits per byte of pointers.  */
   addr_width = 4 + (gdbarch_ptr_bit (gdbarch) / 4);
 
-  update_solib_list (from_tty, 0);
+  if (solib_enabled)
+    update_solib_list (from_tty, 0);
 
   /* make_cleanup_ui_out_table_begin_end needs to know the number of
      rows, so we need to make two passes over the libs.  */
@@ -1152,8 +1156,14 @@ info_sharedlibrary_command (char *pattern, int from_tty)
 	ui_out_message (uiout, 0,
 			_("No shared libraries matched.\n"));
       else
-	ui_out_message (uiout, 0,
+      {
+        if (solib_enabled)
+	      ui_out_message (uiout, 0,
 			_("No shared libraries loaded at this time.\n"));
+        else
+	      ui_out_message (uiout, 0,
+			_("Shared library support is disabled.\n"));
+      }
     }
   else
     {
@@ -1273,7 +1283,8 @@ solib_create_inferior_hook (int from_tty)
 {
   const struct target_so_ops *ops = solib_ops (target_gdbarch ());
 
-  ops->solib_create_inferior_hook (from_tty);
+  if (solib_enabled)
+    ops->solib_create_inferior_hook (from_tty);
 }
 
 /* Check to see if an address is in the dynamic loader's dynamic
@@ -1510,6 +1521,24 @@ show_auto_solib_add (struct ui_file *file, int from_tty,
 		    value);
 }
 
+/* Implements the command "disable sharedlibrary".  */
+
+static void
+disable_shared_libraries (char *ignored, int from_tty)
+{
+  solib_enabled = 0;
+  remove_solib_event_breakpoints ();
+  no_shared_libraries (NULL, from_tty);
+}
+
+/* Implements the command "enable sharedlibrary".  */
+
+static void
+enable_shared_libraries (char *ignored, int from_tty)
+{
+  solib_enabled = 1;
+  reload_shared_libraries (NULL, from_tty, NULL);
+}
 
 /* Handler for library-specific lookup of global symbol NAME in OBJFILE.  Call
    the library-specific handler if it is installed for the current target.  */
@@ -1679,6 +1708,11 @@ _initialize_solib (void)
   add_com ("nosharedlibrary", class_files, no_shared_libraries,
 	   _("Unload all shared object library symbols."));
 
+#ifdef ENABLE_LKD
+  add_info_alias ("modules", "sharedlibrary", 0);
+  add_com_alias ("modules", "sharedlibrary", class_files, 0);
+#endif
+
   add_setshow_boolean_cmd ("auto-solib-add", class_support,
 			   &auto_solib_add, _("\
 Set autoloading of shared library symbols."), _("\
@@ -1708,6 +1742,13 @@ For other (relative) files, you can add directories using\n\
   add_alias_cmd ("solib-absolute-prefix", "sysroot", class_support, 0,
 		 &showlist);
 
+#ifdef ENABLE_LKD
+  add_alias_cmd ("target-root-prefix", "sysroot", class_support, 0,
+		 &setlist);
+  add_alias_cmd ("target-root-prefix", "sysroot", class_support, 0,
+		 &showlist);
+#endif
+
   add_setshow_optional_filename_cmd ("solib-search-path", class_support,
 				     &solib_search_path, _("\
 Set the search path for loading non-absolute shared library symbol files."),
@@ -1719,4 +1760,19 @@ PATH and LD_LIBRARY_PATH."),
 				     reload_shared_libraries,
 				     show_solib_search_path,
 				     &setlist, &showlist);
+
+#ifdef ENABLE_LKD
+  add_alias_cmd ("module-search-path", "solib-search-path", class_support, 0,
+		 &setlist);
+  add_alias_cmd ("module-search-path", "solib-search-path", class_support, 0,
+		 &showlist);
+#endif
+
+  add_cmd ("sharedlibrary", class_support, disable_shared_libraries, _("\
+Disable shared library support."),
+	   &disablelist);
+
+  add_cmd ("sharedlibrary", class_support, enable_shared_libraries, _("\
+Enable shared library support."),
+	   &enablelist);
 }

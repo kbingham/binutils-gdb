@@ -721,7 +721,9 @@ ALL_TARGET_OBS = \
 	symfile-mem.o \
 	windows-tdep.o \
 	linux-record.o \
-	ravenscar-thread.o
+	ravenscar-thread.o \
+	lkd-main.o lkd-modules.o lkd-process.o lkd-proxy.o \
+	lkd-arm.o lkd-sh4.o
 
 # Host-dependent makefile fragment comes in here.
 @host_makefile_frag@
@@ -988,7 +990,8 @@ common/common-exceptions.h target/target.h common/symbol.h \
 common/common-regcache.h fbsd-tdep.h nat/linux-personality.h \
 common/fileio.h nat/x86-linux.h nat/x86-linux-dregs.h \
 nat/linux-namespaces.h arch/arm.h common/gdb_sys_time.h arch/aarch64-insn.h \
-tid-parse.h
+tid-parse.h \
+stlinux/lkd.h stlinux/lkd-android.h stlinux/lkd-modules.h stlinux/lkd-process.h
 
 # Header files that already have srcdir in them, or which are in objdir.
 
@@ -1355,6 +1358,7 @@ init.c: $(INIT_FILES)
 	    -e '/[a-z0-9A-Z_]*-exp.tab.[co]$$/d' \
 	    -e 's/\.[co]$$/.c/' \
 	    -e 's,signals\.c,common/signals\.c,' \
+	    -e 's,\(lkd-.*\.c\),stlinux/\1,' \
 	    -e 's|^\([^  /][^     ]*\)|$(srcdir)/\1|g' | \
 	while read f; do \
 	    sed -n -e 's/^_initialize_\([a-z_0-9A-Z]*\).*/\1/p' $$f 2>/dev/null; \
@@ -1754,7 +1758,9 @@ ALLDEPFILES = \
 	xcoffread.c \
 	xstormy16-tdep.c \
 	xtensa-tdep.c xtensa-config.c \
-	xtensa-linux-tdep.c xtensa-linux-nat.c xtensa-xtregs.c
+	xtensa-linux-tdep.c xtensa-linux-nat.c xtensa-xtregs.c \
+	stlinux/lkd-main.c stlinux/lkd-modules.c stlinux/lkd-process.c \
+	stlinux/lkd-proxy.c stlinux/lkd-arm.c stlinux/lkd-sh4.c
 
 # Some files need explicit build rules (due to -Werror problems) or due
 # to sub-directory fun 'n' games.
@@ -2710,6 +2716,43 @@ py-value.o: $(srcdir)/python/py-value.c
 
 py-varobj.o: $(srcdir)/python/py-varobj.c
 	$(COMPILE) $(PYTHON_CFLAGS) $(srcdir)/python/py-varobj.c
+	$(POSTCOMPILE)
+
+#
+# gdb/stlinux/ dependencies
+#
+# Need to explicitly specify the compile rule as make will do nothing
+# or try to compile the object file into the sub-directory.
+lkd-irqs.o: $(srcdir)/stlinux/lkd-irqs.c
+	$(COMPILE) $(srcdir)/stlinux/lkd-irqs.c
+	$(POSTCOMPILE)
+
+lkd-main.o: $(srcdir)/stlinux/lkd-main.c
+	$(COMPILE) $(srcdir)/stlinux/lkd-main.c
+	$(POSTCOMPILE)
+
+lkd-modules.o: $(srcdir)/stlinux/lkd-modules.c
+	$(COMPILE) $(srcdir)/stlinux/lkd-modules.c
+	$(POSTCOMPILE)
+
+lkd-process.o: $(srcdir)/stlinux/lkd-process.c
+	$(COMPILE) $(srcdir)/stlinux/lkd-process.c
+	$(POSTCOMPILE)
+
+lkd-proxy.o: $(srcdir)/stlinux/lkd-proxy.c
+	$(COMPILE) $(srcdir)/stlinux/lkd-proxy.c
+	$(POSTCOMPILE)
+
+# These call into the lkd-proxy to set remote commands.
+# In doing so - they utilise a dynamic format string on a sprintf call.
+# The compiler doesn't like this - so we could rewrite it somehow perhaps.
+# but until then ...  -Wno-error=format-nonliteral (;-S)
+lkd-arm.o: $(srcdir)/stlinux/lkd-arm.c
+	$(COMPILE) $(srcdir)/stlinux/lkd-arm.c -Wno-error=format-nonliteral
+	$(POSTCOMPILE)
+
+lkd-sh4.o: $(srcdir)/stlinux/lkd-sh4.c
+	$(COMPILE) $(srcdir)/stlinux/lkd-sh4.c -Wno-error=format-nonliteral
 	$(POSTCOMPILE)
 
 #

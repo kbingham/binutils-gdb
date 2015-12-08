@@ -44,7 +44,7 @@ show_logging_filename (struct ui_file *file, int from_tty,
 		    value);
 }
 
-static int logging_overwrite;
+/*static*/ int logging_overwrite;
 
 static void
 set_logging_overwrite (char *args, int from_tty, struct cmd_list_element *c)

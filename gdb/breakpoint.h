@@ -1629,4 +1629,13 @@ extern char *ep_parse_optional_if_clause (char **arg);
    UIOUT iff debugging multiple threads.  */
 extern void maybe_print_thread_hit_breakpoint (struct ui_out *uiout);
 
+/* Return number of H/W breakpoints in use.  */
+extern int hw_breakpoint_used_count (void);
+
+/* Returns the sum the used resources of all hardware watchpoints of
+   type TYPE in the breakpoints list.  Also returns in OTHER_TYPE_USED
+   the sum of the used resources of all hardware watchpoints of other
+   types _not_ TYPE.  */
+extern int hw_watchpoint_used_count_others (struct breakpoint *,
+					    enum bptype, int *);
 #endif /* !defined (BREAKPOINT_H) */

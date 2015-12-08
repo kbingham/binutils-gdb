@@ -194,6 +194,8 @@ static void commands_command (char *, int);
 
 static void condition_command (char *, int);
 
+void set_breakpoint_count (int);
+
 typedef enum
   {
     mark_inserted,
@@ -210,13 +212,7 @@ static int watchpoint_check (void *);
 
 static void maintenance_info_breakpoints (char *, int);
 
-static int hw_breakpoint_used_count (void);
-
 static int hw_watchpoint_use_count (struct breakpoint *);
-
-static int hw_watchpoint_used_count_others (struct breakpoint *except,
-					    enum bptype type,
-					    int *other_type_used);
 
 static void hbreak_command (char *, int);
 
@@ -419,7 +415,7 @@ show_can_use_hw_watchpoints (struct ui_file *file, int from_tty,
    If AUTO_BOOLEAN_TRUE, gdb will automatically create pending breakpoints
    for unrecognized breakpoint locations.
    If AUTO_BOOLEAN_AUTO, gdb will query when breakpoints are unrecognized.  */
-static enum auto_boolean pending_break_support;
+/*static*/ enum auto_boolean pending_break_support;
 static void
 show_pending_break_support (struct ui_file *file, int from_tty,
 			    struct cmd_list_element *c,
@@ -614,11 +610,11 @@ struct breakpoint *breakpoint_chain;
 
 /* Array is sorted by bp_location_compare - primarily by the ADDRESS.  */
 
-static struct bp_location **bp_location;
+/*static*/ struct bp_location **bp_location;
 
 /* Number of elements of BP_LOCATION.  */
 
-static unsigned bp_location_count;
+/*static*/ unsigned bp_location_count;
 
 /* Maximum alignment offset between bp_target_info.PLACED_ADDRESS and
    ADDRESS for the current elements of BP_LOCATION which get a valid
@@ -643,7 +639,7 @@ VEC(bp_location_p) *moribund_locations = NULL;
 
 /* Number of last breakpoint made.  */
 
-static int breakpoint_count;
+/*static*/ int breakpoint_count;
 
 /* The value of `breakpoint_count' before the last command that
    created breakpoints.  If the last (break-like) command created more
@@ -685,7 +681,7 @@ breakpoint_enabled (struct breakpoint *b)
 
 /* Set breakpoint count to NUM.  */
 
-static void
+/*static*/ void
 set_breakpoint_count (int num)
 {
   prev_breakpoint_count = breakpoint_count;
@@ -8765,7 +8761,8 @@ print_recreate_catch_exec (struct breakpoint *b, struct ui_file *fp)
 
 static struct breakpoint_ops catch_exec_breakpoint_ops;
 
-static int
+
+int
 hw_breakpoint_used_count (void)
 {
   int i = 0;
@@ -8813,7 +8810,7 @@ hw_watchpoint_use_count (struct breakpoint *b)
    the sum of the used resources of all hardware watchpoints of other
    types _not_ TYPE.  */
 
-static int
+int
 hw_watchpoint_used_count_others (struct breakpoint *except,
 				 enum bptype type, int *other_type_used)
 {
@@ -8831,7 +8828,7 @@ hw_watchpoint_used_count_others (struct breakpoint *except,
       if (b->type == type)
 	i += hw_watchpoint_use_count (b);
       else if (is_hardware_watchpoint (b))
-	*other_type_used = 1;
+	(*other_type_used)++;
     }
 
   return i;

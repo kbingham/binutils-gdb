@@ -1,0 +1,9 @@
+The Linux Awareness target is a GDB target meant to provide efficient support
+for Linux kernel debugging through JTAG.  Most commands and features can be
+listed thanks to:
+
+(gdb) help STM
+(gdb) show linux-awareness
+
+The code in this folder is indent according to GNU / Linux coding style (sigh),
+performing "indent *.[ch]" in this folder is fine.
