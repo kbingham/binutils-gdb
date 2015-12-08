@@ -7,7 +7,7 @@ CPUARCHLIST.bare=armv7_bare cross_armv7_bare sh4_bare
 CPUARCHLIST=$(CPUARCHLIST.stlinux) $(CPUARCHLIST.bare)
 
 ifeq ($(CPUARCH),)
-$(error CPUARCH undefined, choose $(CPUARCHLIST))
+CPUARCH=armv7
 else
 ifeq ($(filter $(CPUARCH),$(CPUARCHLIST)),)
 $(error CPUARCH not recognised ($(CPUARCH)), choose $(CPUARCHLIST))
@@ -41,12 +41,12 @@ all: build install
 ################################################################################
 
 ifneq ($(filter $(CPUARCH),$(CPUARCHLIST.stlinux)),)
-INSTALLTARGETS=install_host_gdb install_target_gdb install_target_gdbserver
+INSTALLTARGETS=install_host_gdb # install_target_gdb install_target_gdbserver
 else
 INSTALLTARGETS=install_bare_gdb
 endif
 
-install: $(INSTALLTARGETS)
+install: build $(INSTALLTARGETS)
 
 install_host_gdb: $(OBJDIR)/host/Makefile
 	$(MAKE) -C $(OBJDIR)/host install
@@ -63,7 +63,7 @@ install_bare_gdb: $(OBJDIR)/Makefile
 ################################################################################
 
 ifneq ($(filter $(CPUARCH),$(CPUARCHLIST.stlinux)),)
-BUILDTARGETS=build_host_gdb build_target_gdb build_target_gdbserver
+BUILDTARGETS=build_host_gdb ### build_target_gdb build_target_gdbserver
 else
 BUILDTARGETS=build_bare_gdb
 endif
@@ -99,7 +99,7 @@ $(OBJDIR)/Makefile:
 ################################################################################
 
 ifneq ($(filter $(CPUARCH),$(CPUARCHLIST.stlinux)),)
-CONFIGURETARGETS=configure_host_$(CPUARCH) configure_target_$(CPUARCH)
+CONFIGURETARGETS=configure_host_$(CPUARCH) # configure_target_$(CPUARCH)
 else
 CONFIGURETARGETS=configure_bare_$(CPUARCH)
 endif
