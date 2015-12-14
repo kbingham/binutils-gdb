@@ -186,7 +186,8 @@ lkd_proxy_init_target (struct target_ops * beneath)
 	found = 1;
       }
       else
-	printf_filtered ("unknown.\n");
+	printf_filtered ("unknown response : %s\n", out);
+      found = 1;
     }
 
   if (!found)
