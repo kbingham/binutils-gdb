@@ -124,6 +124,7 @@ configure_host_armv7_gdb:
 		--enable-linux-kernel-aware \
 		--enable-shtdi \
 		--enable-tui \
+		--with-expat=yes \
 		--with-python=no \
 		--with-sysroot=/opt/STM/STLinux-2.4/devkit/armv7/target \
 		--with-separate-debug-dir=/opt/STM/STLinux-2.4/devkit/armv7/target/usr/lib/debug
