@@ -9186,6 +9186,9 @@ arm_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   tdep->is_m = is_m;
   tdep->have_fpa_registers = have_fpa_registers;
   tdep->have_wmmx_registers = have_wmmx_registers;
+
+  printf_filtered("vfp_register_count = %d\n", vfp_register_count);
+
   gdb_assert (vfp_register_count == 0
 	      || vfp_register_count == 16
 	      || vfp_register_count == 32);
