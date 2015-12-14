@@ -4274,6 +4274,12 @@ lkd_loaded_set (char *arg, int from_tty, struct cmd_list_element *c)
 	  lkd_private.target_pointer_type =
 			builtin_type (target_gdbarch())->builtin_data_ptr;
 
+	  DEBUG (D_INIT, 1, "lkd_loaded_set : target_gdbarch() 0x%p\n", target_gdbarch());
+	  DEBUG (D_INIT, 1, "lkd_loaded_set : builtin_type (target_gdbarch()) 0x%p\n", builtin_type (target_gdbarch()));
+
+      DEBUG (D_INIT, 1, "lkd_loaded_set : target_pointer_type set in 0x%p\n", lkd_private.target_pointer_type);
+
+
       if (linux_awareness_ops->lo_pre_load)
 	linux_awareness_ops->lo_pre_load (file_name, from_tty);
 

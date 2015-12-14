@@ -73,8 +73,12 @@ remote_execute_command (char *in)
 
   snprintf(cmd_buf, size, "Qst %s", in);
 
+  DEBUG (D_INIT, 1, "remote_execute_command : -> [%s] \n", cmd_buf);
+
   putpkt (cmd_buf);
   getpkt (&cmd_buf, &size, 1);
+
+  DEBUG (D_INIT, 1, "remote_execute_command : <- [%s] \n", cmd_buf);
 
   return cmd_buf;
 }
