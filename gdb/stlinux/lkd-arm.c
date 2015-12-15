@@ -950,6 +950,9 @@ arch_check_mem_rdy(void)
 	  scr = PROXY_EXEC (rd_cp15_SCR0);
 	  sscanf (scr, "%x", &val);
 
+	  DEBUG (D_INIT, 1, "SCR Returned %s, and determined 0x%x (%s)\n", scr, val,
+			  ((val & ARMv7_BIT_MMUE) != 0) ? "True" : "False");
+
 	  return ((val & ARMv7_BIT_MMUE) != 0);
 
 #undef ARMv7_BIT_MMUE

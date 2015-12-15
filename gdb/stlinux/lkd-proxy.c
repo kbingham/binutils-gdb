@@ -180,7 +180,7 @@ lkd_proxy_init_target (struct target_ops * beneath)
       out = CUR_LKD_REMOTE.exec (CUR_LKD_REMOTE.version);
       if (strstr (out, "st"))
       {
-	printf_filtered ("%s.\n", out);
+	printf_filtered ("Version request return : [%s].\n", out);
 
 	add_com ("st", class_stm, st_qemu_command, "");
 	found = 1;

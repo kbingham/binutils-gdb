@@ -4197,6 +4197,8 @@ lkd_try_push_target (void)
   if (lkd_proxy_init_target (BENEATH) != lkd_invalid)
     return LKD_LOADED;
 
+  DEBUG (D_INIT, 1, "lkd_try_push_target: Init target failed : Not Loaded.\n");
+
   return LKD_NOTLOADED;
 }
 
@@ -4367,6 +4369,8 @@ lkd_loaded_set (char *arg, int from_tty, struct cmd_list_element *c)
 __sl_fail:
   /* silently fail, we retry later.
    **/
+	DEBUG (D_INIT, 1, "(not so) Silently Failing ...\n");
+
   lkd_params.loaded = LKD_NOTLOADED;
   lkd_private.loaded = LKD_NOTLOADED;
   return;
