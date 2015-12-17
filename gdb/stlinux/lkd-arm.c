@@ -945,7 +945,8 @@ arch_check_mem_rdy(void)
 
 	  /* Make sure we are testing on core0, as smp linux
 	   * may be init'ing core0, while coreN is on hold. */
-	  switch_to_thread (ptid_build (ptid_get_pid (inferior_ptid),0,1));
+	  warning(_("Not switching threads, because STMC/SHTDI and QEmu have different concepts of TID/LWP usage\n"));
+	  //switch_to_thread (ptid_build (ptid_get_pid (inferior_ptid),0,1));
 
 	  scr = PROXY_EXEC (rd_cp15_SCR0);
 	  sscanf (scr, "%x", &val);
