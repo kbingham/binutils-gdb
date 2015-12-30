@@ -3527,6 +3527,11 @@ do_target_wait (ptid_t ptid, struct target_waitstatus *status, int options)
   if (ptid_equal (ptid, minus_one_ptid) || ptid_is_pid (ptid))
     {
       tp = random_pending_event_thread (ptid);
+      if (!tp)
+	      printf_filtered(_("%s: random_pending_event_thread returned NULL. Inferior_ptid = {%d,%ld,%ld} ptid={%d,%ld,%ld}\n"),
+			  __FUNCTION__,
+			  inferior_ptid.pid, inferior_ptid.lwp, inferior_ptid.tid,
+			  ptid.pid, ptid.lwp, ptid.tid);
     }
   else
     {
