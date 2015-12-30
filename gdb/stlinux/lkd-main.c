@@ -1820,11 +1820,11 @@ linux_aware_wait (struct target_ops *ops,
   struct cleanup *cleanup;
   ptid_t stop_ptid;
 
-  /* We aren't running anymore. */
-  running = 0;
-
   if (thread_awareness_inhibited () || !(lkd_private.kflags & KFLAG_DBGINFO))
     return BENEATH->to_wait (ops, ptid, status, opts);
+
+  /* We aren't running anymore. */
+  running = 0;
 
   /* The linux aware wait begins here. */
   thread_awareness_inhibit ();
