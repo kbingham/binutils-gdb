@@ -2185,6 +2185,18 @@ linux_aware_files_info (struct target_ops *target)
   printf_filtered (_("Connected to remote linux kernel\n"));
 }
 
+static int
+linux_aware_can_async_p (struct target_ops *ops)
+{
+  return 0;
+}
+
+static int
+linux_aware_is_async_p (struct target_ops *ops)
+{
+  return 0;
+}
+
 /* Setup the target_ops callbacks. */
 static void
 init_linux_aware_target (void)
@@ -2239,6 +2251,14 @@ init_linux_aware_target (void)
   linux_aware_ops.to_has_registers = linux_aware_has_registers;
   linux_aware_ops.to_has_execution = linux_aware_has_execution;
   linux_aware_ops.to_files_info = linux_aware_files_info;
+
+  /* Prevent Async operations
+   * LKD doesn't yet support ASync,
+   * Particularly on connect/resume, which can break things
+   * when connecting to an async target such as QEmu
+   */
+  linux_aware_ops.to_can_async_p = linux_aware_can_async_p;
+  linux_aware_ops.to_is_async_p = linux_aware_is_async_p;
 }
 
 /******************************************************************************/
