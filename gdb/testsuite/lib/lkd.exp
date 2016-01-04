@@ -1,0 +1,719 @@
+# *******************************************************************************
+# *                            C STMicroelectronics
+# *    Reproduction and Communication of this document is strictly prohibited
+# *      unless specifically authorized in writing by STMicroelectronics.
+# *------------------------------------------------------------------------------
+# * 	                               IDTEC
+# *------------------------------------------------------------------------------
+# * $Id: lkd.exp,v 1.0 2009/04/02
+# *------------------------------------------------------------------------------
+# * Library called by converted TestSuite test
+# *------------------------------------------------------------------------------
+# * Created by Mathieu AUVRAY on Thu Febrary 15 2010
+# *
+# * Revision 1.0
+# *
+# ******************************************************************************
+
+load_lib gdb.exp
+
+##todo, fix use of genuine rsh.exp
+#
+load_lib lkd_rsh.exp
+# we use our rsh.exp becausse the one delvered with DEJAGNU is broken
+
+set boards_dir [concat "$srcdir/boards" $boards_dir]
+
+proc kernel_connect { } {
+    global kernel_spawn_id
+
+    if [info exists kernel_spawn_id] {
+	return 0
+    }
+
+    set shell_id [remote_open board_stmc]
+    set test "Remote login to board_stmc"
+
+    if { $shell_id > 0 } {
+	pass "$test"
+    } else {
+	fail "lkd.exp:$test"
+    }
+
+    set kernel_spawn_id -1
+    return 0
+}
+
+proc kernel_exit {} {
+    global kernel_spawn_id
+    verbose "Closing connection" 1
+
+    remote_send board_stmc "exit\n"
+
+    if ![info exists kernel_spawn_id] {
+	return
+    }
+
+    remote_close board_stmc
+
+    unset kernel_spawn_id
+}
+
+proc server_start { string } {
+    remote_send board_stmc "gdbserver host:2345 $string\n"
+    remote_expect board_stmc 20 {
+	-re "Listening on port 2345" {
+	    pass "Gdbserver has been succesfully open"
+	}
+	timeout {
+	    fail "lkd.exp:Failed to open gdbserver'"
+	}
+    }
+}
+
+proc reset_stmc { } {
+    global stmc_ip
+    if {[regexp {^STMCLT[0-9].*} $stmc_ip]} {
+	return
+    }
+    set cmd_reset "stmcconfig --ip $stmc_ip --reset"
+    verbose "Reseting STMC (${cmd_reset})" 1
+    remote_exec build "${cmd_reset}"
+    sleep 30
+}
+
+
+proc send_board { string } {
+    global suppress_flag
+    if { $suppress_flag } {
+	return "suppressed"
+    }
+    remote_send board_stmc "$string\n"
+}
+
+proc send_board_return { string } {
+    send_board "$string"
+    remote_expect board_stmc 60 {
+	-re ".*root@.*:~#" { pass "command $string returned" }
+    }
+}
+
+proc send_module_load {arg} {
+    verbose "Trying to load module $arg" 2
+    send_board "insmod /tmp/$arg.ko"
+}
+
+proc module_load {arg} {
+    send_module_load $arg
+    remote_expect board_stmc 120 {
+	-re ".*root@.*:~#" {
+	    pass "Module $arg loaded"
+	    return 1
+	}
+	-re ".*insmod: error inserting '$arg.ko'.*" {
+	    fail "lkd.exp:Error during loading of module $arg"
+	}
+	timeout	{
+	    fail "lkd.exp:(timeout) unable to load module"
+	}
+    }
+    return 0
+}
+
+proc check_module_load {arg ok} {
+    global timeout
+
+    set timeout 120
+    gdb_expect {
+	-re "\\\[New module '$arg'.*$arg.ko.*\\\]\[\r\n\]+" { set found 1 }
+	-re "You just loaded the '$arg' module.*The debugger searched for '$arg.ko' in module-search-path,.*but didn't find the module file.*Current module-search-path is:.*$" { set found 0 }
+	timeout {
+	    fail "lkd.exp:(timeout) GDB doesn't get the module load event for $arg"
+	    return
+	}
+    }
+
+    set test "Notification of $arg module load"
+    if { $ok == $found } {
+	pass $test
+    } else {
+	fail $test
+    }
+}
+
+proc module_load_checked {arg ok} {
+    if ![module_load $arg] {
+	return
+    }
+
+    check_module_load $arg $ok
+}
+
+proc module_unload {arg} {
+    verbose "Trying to unload module $arg" 2
+    send_board "rmmod $arg"
+    remote_expect board_stmc 90 {
+	-re ".*root@.*:~#" {
+	    pass "Module $arg unloaded"
+	    return 1
+	}
+	-re "ERROR: Module.*does not exist in /proc/modules" {
+	    fail "lkd.exp:Module $arg was not loaded"
+	}
+	timeout	{
+	    fail "lkd.exp:(timeout) unable to unload module"
+	}
+    }
+    return 0
+}
+
+proc module_unload_checked {arg} {
+    global timeout
+
+    if ![module_unload $arg] {
+	return
+    }
+
+    set timeout 30
+    gdb_expect {
+	-re "\\\[Unloading module '$arg'.*\\\]\[\r\n\]+" { pass "Unload notification of $arg" }
+	timeout { fail "lkd.exp:Unload notification not get for $arg" }
+    }
+}
+
+proc module_install {arg} {
+    global sysroot
+    remote_exec build "cp -f $arg $sysroot/tmp/"
+}
+
+proc module_uninstall {arg} {
+    global sysroot
+    remote_exec build "rm -fr $sysroot/tmp/$arg"
+}
+
+proc kernel_expect { args } {
+
+    global tcl_platform
+
+    if { $tcl_platform(platform) == "windows" } {
+        regsub -all "\\\\r\\\\n" $args "\\n" args
+        regsub -all "\r\n" $args "\\n" args
+    }
+    if { [llength $args] == 2  && [lindex $args 0] != "-re" } {
+	set gtimeout [lindex $args 0]
+	set expcode [list [lindex $args 1]]
+    } else {
+	upvar timeout timeout
+
+	set expcode $args
+	if [target_info exists kernel,timeout] {
+	    if [info exists timeout] {
+		if { $timeout < [target_info kernel,timeout] } {
+		    set gtimeout [target_info kernel,timeout]
+		} else {
+		    set gtimeout $timeout
+		}
+	    } else {
+		set gtimeout [target_info kernel,timeout]
+	    }
+	}
+	if ![info exists gtimeout] {
+	    global timeout
+	    if [info exists timeout] {
+		set gtimeout $timeout
+	    } else {
+		# Eeeeew.
+		set gtimeout 60
+	    }
+	}
+    }
+
+    global suppress_flag
+    global remote_suppress_flag
+    if [info exists remote_suppress_flag] {
+	set old_val $remote_suppress_flag
+    }
+    if [info exists suppress_flag] {
+	if { $suppress_flag } {
+	    set remote_suppress_flag 1
+	}
+    }
+    set code [catch \
+	{uplevel remote_expect target $gtimeout $expcode} string]
+    if [info exists old_val] {
+	set remote_suppress_flag $old_val
+    } else {
+	if [info exists remote_suppress_flag] {
+	    unset remote_suppress_flag
+	}
+    }
+    if {$code == 1} {
+	global errorInfo errorCode
+	return -code error -errorinfo $errorInfo -errorcode $errorCode $string
+    } elseif {$code == 2} {
+	return -code return $string
+    } elseif {$code == 3} {
+	return
+    } elseif {$code > 4} {
+	return -code $code $string
+    }
+}
+
+proc lkd_ctrlc {} {
+    global gdb_prompt
+    global timeout
+    send_gdb "\003"
+    set timeout 120
+    gdb_expect {
+	-re ".*Quit.*$gdb_prompt $" {
+	    fail "lkd.exp:gdb was already stopped"
+	}
+#	-re ".*Program received signal SIGINT.*$gdb_prompt $" {
+#	    pass "send_gdb control C"
+#	}
+	-re ".*$gdb_prompt $" {
+	    pass "send_gdb control C"
+	}
+	timeout { fail "lkd.exp:send_gdb control C (timeout)" }
+	eof { fail "lkd.exp:send_gdb control C (eof)" }
+    }
+}
+
+# send ctrl to LKD when working w/o dbg info
+##
+proc lkd_ctrlc_nodbg {} {
+    global gdb_prompt
+    global timeout
+    send_gdb "\003"
+    set timeout 120
+    gdb_expect {
+	-re ".*Quit.*$gdb_prompt $" {
+	    unresolved "lkd.exp:gdb was already stopped"
+	}
+	-re ".*nvalid.*$gdb_prompt $" {
+	    fail "control C failed"
+	}
+	-re ".*No such field thread_info::task.*$gdb_prompt $" {
+	    pass "send_gdb control C (no debug info test case)"
+	}
+	-re ".*$gdb_prompt $" {
+	    pass "send_gdb control C"
+	}
+	timeout { fail "lkd.exp:send_gdb control C (timeout)" }
+	eof { fail "lkd.exp:send_gdb control C (eof)" }
+    }
+}
+
+proc lkd_start { } {
+    global use_gdb_stub
+    global gdb_prompt
+    global timeout
+    global gdb_spawn_id
+    global gdb_bin_loader
+    global gdb_bin_loader_args
+    global sysroot
+
+    gdb_stop_suppressing_tests
+
+    set use_gdb_stub [target_info exists use_gdb_stub]
+
+    if [info exists gdb_spawn_id] {
+	return 0
+    }
+
+    if ![is_remote host] {
+	if { [which $gdb_bin_loader] == 0 } then {
+	    perror "$gdb_bin_loader does not exist."
+	    exit 1
+	}
+    }
+
+    set connected 0
+    for { set i 0 } { $i < 2 && $connected == 0 } { incr i } {
+	verbose "lkd.exp:Spawning $gdb_bin_loader $gdb_bin_loader_args" 2
+	set timeout 360
+	set res [remote_spawn host "$gdb_bin_loader $gdb_bin_loader_args"]
+
+	if { $res < 0 || $res == "" } {
+	    perror "lkd.exp:Spawning $gdb_bin_loader $gdb_bin_loader_args failed."
+	    return 1
+	}
+
+	gdb_expect {
+	    -re "Running kernel" {
+		verbose "\nlkd.exp:GDB initialized." 1
+		set connected 1
+	    }
+	    -re "Loading ST40 LKD support.*" {
+		verbose "\nlkd.exp:GDB initialized." 1
+		set connected 1
+	    }
+	    -re "$gdb_bin_loader terminated.*" {
+		perror "lkd.exp:Error during initialization."
+		return -1
+	    }
+	    -re "$gdb_prompt $"	{
+		perror "lkd.exp:GDB failed to initialize."
+		return -1
+	    }
+	    timeout {
+		perror "lkd.exp:(timeout) GDB failed to initialize after $timeout seconds."
+		remote_close host
+		return -1
+	    }
+	    eof {
+		# A problem has been raised, it may be due to the STMC
+		reset_stmc
+	    }
+	}
+    }
+
+    set gdb_spawn_id -1
+
+    verbose "Wait a moment to be sure the board to be fully initialized." 1
+    sleep 90
+
+    # Send ctrl-C event to get the hand in the debugger
+    lkd_ctrlc_nodbg
+
+    set timeout 10
+
+    # force the height to "unlimited", so no pagers get used
+    send_gdb "set height 0\n"
+    gdb_expect {
+	-re "$gdb_prompt $" {
+	    pass "lkd.exp:Setting height to 0."
+	}
+	timeout {
+	    warning "lkd.exp:Couldn't set the height to 0"
+	}
+    }
+    # force the width to "unlimited", so no wraparound occurs
+    send_gdb "set width 0\n"
+    gdb_expect {
+	-re "$gdb_prompt $" {
+	    pass "lkd.exp:Setting width to 0."
+	}
+	timeout {
+	    warning "lkd.exp:Couldn't set the width to 0."
+	}
+    }
+
+    send_gdb "set module-search-path $sysroot/tmp\n"
+    gdb_expect {
+	-re "$gdb_prompt $" {
+	    pass "Setting the module search path"
+	}
+	timeout {
+	    fail "lkd.exp:Couldn't set the module search path"
+	}
+    }
+
+    send_gdb "set target-root-prefix $sysroot\n"
+    gdb_expect {
+	-re "$gdb_prompt $" {
+	    pass "Setting target root prefix"
+	}
+	timeout {
+	    fail "lkd.exp:Couldn't set target root prefix"
+	}
+    }
+
+    send_gdb "set linux-awareness no-colors on\n"
+    gdb_expect {
+	-re "$gdb_prompt $" {  pass "set linux-awareness no-colors on"	}
+	timeout { fail "fail set linux-awareness no-colors on" }
+    }
+
+    lkd_continue
+
+    return 0
+}
+
+proc lkd_attach { } {
+    global gdb_prompt
+    global timeout
+    global gdb_spawn_id
+    global gdb_bin_attach
+    global gdb_bin_attach_args
+    global sysroot
+
+    gdb_stop_suppressing_tests
+
+    if [info exists gdb_spawn_id] {
+	return 0
+    }
+
+    if ![is_remote host] {
+	if { [which $gdb_bin_attach] == 0 } then {
+	    perror "$gdb_bin_attach does not exist."
+	    exit 1
+	}
+    }
+
+    verbose "lkd.exp:Spawning $gdb_bin_attach $gdb_bin_attach_args" 2
+    set timeout 360
+    set res [remote_spawn host "$gdb_bin_attach $gdb_bin_attach_args"]
+
+    if { $res < 0 || $res == "" } {
+	perror "lkd.exp:Spawning $gdb_bin_attach $gdb_bin_attach_args failed."
+	return 1
+    }
+
+    gdb_expect {
+	-re "$gdb_bin_attach terminated with code.*"	{
+	    perror "Error during initialization."
+	    return -1
+	}
+	-re "$gdb_prompt $"	{
+	    verbose "\nGDB initialized." 1
+	}
+	timeout	{
+	    perror "(timeout) GDB failed to initialize after $timeout seconds."
+	    remote_close host
+	    return -1
+	}
+    }
+
+    set gdb_spawn_id -1
+
+    set timeout 10
+
+    # force the height to "unlimited", so no pagers get used
+    send_gdb "set height 0\n"
+    gdb_expect {
+	-re "$gdb_prompt $" {
+	    verbose "lkd.exp:Setting height to 0." 2
+	}
+	timeout {
+	    warning "lkd.exp:Couldn't set the height to 0"
+	}
+    }
+    # force the width to "unlimited", so no wraparound occurs
+    send_gdb "set width 0\n"
+    gdb_expect {
+	-re "$gdb_prompt $" {
+	    verbose "lkd.exp:Setting width to 0." 2
+	}
+	timeout {
+	    warning "lkd.exp:Couldn't set the width to 0."
+	}
+    }
+
+#    send_gdb "set download-write-size 65536\n"
+#    gdb_expect {
+#	-re "$gdb_prompt $" {
+#	    verbose "Setting download-write-size to speed-up emu" 2
+#	}
+#	timeout {
+#	    warning "lkd.exp:Couldn't set the download-write-size to 65536."
+#	}
+#    }
+
+    send_gdb "set breakpoint pending auto\n"
+    gdb_expect {
+	-re "$gdb_prompt $" {
+	    pass "Turn off automatic breapoint pending"
+	}
+	timeout {
+	    fail "Couldn't set breakpoint pending to auto"
+	}
+    }
+
+    send_gdb "set module-search-path $sysroot/tmp\n"
+    gdb_expect {
+	-re "$gdb_prompt $" {
+	    pass "Setting the module search path"
+	}
+	timeout {
+	    fail "lkd.exp:Couldn't set the module search path"
+	}
+    }
+
+    send_gdb "set target-root-prefix $sysroot\n"
+    gdb_expect {
+	-re "$gdb_prompt $" {
+	    pass "Setting target root prefix"
+	}
+	timeout {
+	    fail "lkd.exp:Couldn't set target root prefix"
+	}
+    }
+
+    send_gdb "set linux-awareness no-colors on\n"
+    gdb_expect {
+	-re "$gdb_prompt $" {  pass "set linux-awareness no-colors on"	}
+	timeout { fail "fail set linux-awareness no-colors on" }
+    }
+
+    return 0
+}
+
+proc lkd_connect_to_server { bin } {
+    global GDB
+    global gdb_prompt
+    global timeout
+    global gdb_spawn_id
+    global sysroot
+    global board_ip
+
+    gdb_stop_suppressing_tests
+
+    set arguments "$sysroot/root/$bin"
+    verbose "Spawning $GDB $arguments" 2
+
+    if [info exists gdb_spawn_id] {
+	return 0
+    }
+
+    if ![is_remote host] {
+	if { [which $GDB] == 0 } then {
+	    perror "$GDB does not exist."
+	    exit 1
+	}
+    }
+    set timeout 360
+    set res [remote_spawn host "$GDB $arguments"]
+    if { $res < 0 || $res == "" } {
+	perror "Spawning $GDB $arguments failed."
+	return 1
+    }
+    gdb_expect {
+	-re "$GDB terminated with code.*"	{
+	    perror "Error during initialization."
+	    return -1
+	}
+	-re "$gdb_prompt $"	{
+	    verbose "\nGDB initialized." 1
+	}
+	timeout	{
+	    perror "(timeout) GDB failed to initialize after $timeout seconds."
+	    remote_close host
+	    return -1
+	}
+    }
+
+    set gdb_spawn_id -1
+    sleep 1
+
+    send_gdb "target remote $board_ip:2345\n"
+    set timeout 10
+    gdb_expect {
+	-re "Connection timed out"	{
+	    fail "Error during connection to gdbserver"
+	    return -1
+	}
+	-re "$gdb_prompt $"	{
+	    pass "\nAttach to gdbserver"
+	}
+	timeout	{
+	    perror "(timeout) cannot attach to the gdbserver"
+	    remote_close host
+	    return -1
+	}
+    }
+
+    return 0
+}
+
+proc lkd_detach { } {
+    send_gdb "ondisconnect restart\n"
+    lkd_exit
+}
+
+proc lkd_exit { } {
+    global gdb_spawn_id
+
+    gdb_stop_suppressing_tests
+
+    if ![info exists gdb_spawn_id] {
+	return
+    }
+
+    verbose "Quitting LKD" 2
+
+    if { [board_info host exists fileid] } {
+	send_gdb "quit\n"
+	gdb_expect {
+	    -re "y or n" {
+		send_gdb "y\n"
+		exp_continue
+	    }
+	    -re "DOSEXIT code" { }
+	    default { }
+	}
+   }
+
+    if ![is_remote host] {
+	remote_close host
+    }
+
+    unset gdb_spawn_id
+}
+
+proc lkd_continue { } {
+    send_gdb "continue \n"
+    gdb_expect {
+	-re ".*\[\r\n\]*Continuing.*" {
+	    pass "Continue execution on debugger"
+	}
+	timeout	{
+	    perror "(timeout) GDB cannot continue"
+	    remote_close host
+	    return -1
+	}
+    }
+}
+
+proc lkd_test_info_modules { args } {
+    global gdb_prompt
+
+    set nbArgs [llength $args]
+    if { $nbArgs > 0 } then {
+	send_gdb "info modules\n"
+	for { set i 0 } { $i <= $nbArgs-2 } {} {
+	    set moduleName [lindex $args $i]
+	    incr i
+	    set symRead [lindex $args $i]
+	    incr i
+	    gdb_expect {
+		-re "\[\t \]+\\\(\\\*\\\)\[^\r\n\]*$moduleName\\.ko\[\r\n\]+" {
+		    fail "Debug info not read fully for module $moduleName"
+		}
+		-re "\[^\n\r\]+$moduleName\\.ko\(\\.debug\)?\[\r\n\]+" {
+		    if { $symRead=="Y" } {
+			pass "Debug info read for module $moduleName"
+		    } else {
+			fail "Debug info read for module $moduleName"
+		    }
+		}
+		-re "\[^\n\r\]+\\\[$moduleName\\\]\[\r\n\]+" {
+		    if { $symRead=="N" } {
+			pass "Debug info not read for module $moduleName"
+		    } else {
+			fail "Debug info not read for module $moduleName"
+		    }
+		}
+		-re "\[^\n\r\]+\\\[\[^\n\]+\\\]\[\r\n\]+" {
+		    fail "Failed to check module load for $moduleName"
+		}
+		-re "\[^\n\r\]+\\.ko\(\\.debug\)?\[\r\n\]+" {
+		    fail "Failed to check module load for $moduleName"
+		}
+		-re "$gdb_prompt $" {
+		    fail "Unable to check all the module load"
+		    return 0
+		}
+		timeout {fail "(timeout) Error in info modules"  return 0}
+	    }
+	}
+	gdb_expect {
+	    -re "$gdb_prompt $" {
+		return 0
+	    }
+	    timeout {fail "(timeout) Error in info modules command"  return 0}
+	}
+    } else {
+	gdb_test "info modules" "No shared libraries loaded at this time." "GDB doesn't detect any module"
+    }
+}

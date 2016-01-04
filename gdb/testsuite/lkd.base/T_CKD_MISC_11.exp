@@ -1,0 +1,101 @@
+#
+# author:	marc titinger
+# date:		22/07/2011
+#
+# REF:  https://codex.cro.st.com/wiki/index.php?pagename=CKD_validation_plan&group_id=2104#T_CKD_MISC_10_:_dmesg
+#
+#############################################################################
+
+load_lib lkd.exp
+global gdb_prompt
+
+if $tracelevel then {
+    strace $tracelevel
+}
+
+set curdir $env(PWD)
+lkd_exit
+set res [lkd_start]
+if { $res < 0 } {
+    error "Error during the boot of the board"
+    return "Error during the boot of the board"
+}
+
+kernel_connect
+
+verbose "T_CKD_MISC_11: test proc_xxx commands" 1
+
+lkd_ctrlc_nodbg
+
+##
+#  ipcs
+##
+send_gdb "ipcs\n"
+gdb_expect {
+   -re "\[\r\n\]*.*Shared Memory Segments.*" { pass "ipcs command executed." }
+   -re ".*set linux-awareness loaded.*" { unresolved "test ignored, no symbols in this kernel ?" }
+    timeout { fail "ipcs command failed." }
+}
+
+
+##
+#  proc_ioports
+##
+send_gdb "proc_ioports\n"
+gdb_expect {
+   -re "\[\r\n\]*.* : *" { pass "proc_ioports command executed."}
+   -re ".*No such field.*" { unresolved "test ignored, no symbols in this kernel ?" }
+    timeout { fail "proc_ioports command failed." }
+}
+
+##
+#  proc_version
+##
+send_gdb "proc_version\n"
+gdb_expect {
+   -re "\[\r\n\]*.*utsname.*" { pass "proc_version command executed."}
+    timeout { fail "proc_version command failed." }
+}
+
+##
+#  proc_cmdline
+##
+send_gdb "proc_cmdline\n"
+gdb_expect {
+   -re "\[\r\n\]*.*console=.*" { pass "proc_cmdline command executed." }
+   -re ".*proc_cmdline\r\n.*" { unresolved "test ignored, kernel command line empty." }
+   timeout { fail "proc_cmdline command failed." }
+}
+
+##
+#  proc_mounts
+##
+send_gdb "proc_mounts\n"
+gdb_expect {
+   -re "\[\r\n\]*.*rootfs.*" { pass "proc_mounts command executed." }
+   -re ".*set linux-awareness loaded.*" { unresolved "test ignored, no symbols in this kernel ?" }
+    timeout { fail "proc_mounts command failed." }
+}
+
+##
+#  proc_meminfo
+##
+send_gdb "proc_meminfo\n"
+gdb_expect {
+   -re "\[\r\n\]*.*MemTotal.*" { pass "proc_meminfo command executed." }
+   -re ".*No such field.*" { unresolved "test ignored, no symbols in this kernel ?" }
+    timeout { fail "proc_meminfo command failed." }
+}
+
+##
+#  proc_interrupt
+##
+send_gdb "proc_interrupt\n"
+gdb_expect {
+   -re "\[\r\n\]*.*IRQ.*" { pass "proc_interrupt command executed." }
+   -re ".*set linux-awareness loaded.*" { unresolved "test ignored, no symbols in this kernel ?" }
+    timeout { fail "proc_interrupt command failed." }
+}
+
+kernel_exit
+lkd_exit

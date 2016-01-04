@@ -1,0 +1,6 @@
+
+ # define KDIR, ARCH amd CROSS_COMPILE
+
+all:
+	make -C `pwd`/modules/demo_app other
+

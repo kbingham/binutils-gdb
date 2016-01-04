@@ -1,0 +1,4 @@
+#!/bin/sh
+
+insmod /root/fake_alsa.ko
+my_makedev fake_alsa

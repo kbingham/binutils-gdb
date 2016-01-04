@@ -1,0 +1,84 @@
+#
+# author:	marc titinger
+# date:		22/07/2011
+#
+# REF:  https://codex.cro.st.com/wiki/index.php?pagename=CKD_validation_plan&group_id=2104#T_CKD_TASK_10_:_pmap_a_halted_process
+#
+#############################################################################
+
+load_lib lkd.exp
+global gdb_prompt
+global timeout
+
+if $tracelevel then {
+    strace $tracelevel
+}
+
+#
+# REBOOT THE BOARD
+#
+set curdir $env(PWD)
+lkd_exit
+set res [lkd_start]
+if { $res < 0 } {
+    error "Error during the boot of the board"
+    return "Error during the boot of the board"
+}
+
+kernel_connect
+
+verbose "T_CKD_TASK_11 : pmap a non-scheduled process" 1
+
+# check list for sending commands to the board:
+# - better sending while the board is running
+# - do not check return string if may be halted in bp
+#
+send_board "echo \"while \[ 1 \] ; do set x =1 ; done &\" > ./ww"
+send_board "chmod +x ./ww"
+
+##
+#  force both core to be busy un usermode
+##
+send_board "./ww"
+send_board "./ww"
+sleep 2
+
+lkd_ctrlc_nodbg
+
+send_gdb "set linux-awareness loaded\n"
+gdb_expect {
+    -re ".*failed because kernel has no debug info.*$gdb_prompt $" { fail "No kernel debug info" ; exit }
+    -re ".*$gdb_prompt $" { pass "Set L-A loaded" }
+     timeout { fail "Set L-A loaded" }
+}
+
+send_gdb "p /x __per_cpu_offset\n"
+send_gdb "pgtable\n"
+
+send_gdb "i thr\n"
+gdb_expect {
+    -re ".*\\s+(\[0-9\]+)\\s+init \\(pid: 1 tgid: 1\\).*$gdb_prompt $" { set init_id $expect_out(1,string) ; pass "INIT SCHEDULED ?" }
+     timeout { fail "INIT SCHEDULED ?" }
+}
+
+##
+#  select init, which is not scheduled
+##
+send_gdb "thr $init_id\n"
+send_gdb "process_info\n"
+gdb_expect {
+    -re "p.comm \"init\".*$gdb_prompt $" { pass "SELECTED INIT" }
+     timeout { fail "SELECTED INIT" }
+}
+
+##
+#  execute pmap
+##
+send_gdb "pmap\n"
+gdb_expect {
+    -re "Start.*init.*writeable.*$gdb_prompt $" { pass "GOT PMAP FOR INIT" }
+     timeout { fail "GOT PMAP FOR INIT" }
+}
+
+kernel_exit
+lkd_exit

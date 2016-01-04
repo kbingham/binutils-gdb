@@ -1,0 +1,87 @@
+#
+# author:	marc titinger
+# date:		22/07/2011
+#
+# REF:  https://codex.cro.st.com/wiki/index.php?pagename=KMD_validation_plan&group_id=2104#T_KMD_VM_13478_:_bug_13478x2c._compute_PA_taking_PHYS_OFFSET_into_account
+#
+#############################################################################
+
+load_lib lkd.exp
+global gdb_prompt
+global timeout
+
+if $tracelevel then {
+    strace $tracelevel
+}
+
+#
+# REBOOT THE BOARD
+#
+set curdir $env(PWD)
+lkd_exit
+set res [lkd_start]
+if { $res < 0 } {
+    error "Error during the boot of the board"
+    return "Error during the boot of the board"
+}
+
+kernel_connect
+
+verbose "T_KMD_VM_13478 : compute PA taking PHYS_OFFSET into account" 1
+
+## ==================================
+#  HOST: install the test module (to /tmp)
+## ==================================
+
+remote_exec build "make -C $kdir M=$curdir/modules/demo_app"
+module_install "$curdir/modules/demo_app/fake_alsa.ko"
+
+## ==================================
+#  GDB: disable vm translation
+## ==================================
+lkd_ctrlc_nodbg
+
+send_gdb "set linux-awareness enable_vm_translation 0\n"
+gdb_expect {
+    -re "$gdb_prompt $" { pass "disable VM translation" }
+    timeout { fail "disable VM translation (timeout)" }
+}
+
+# check list for sending commands to the board:
+# - better sending while the board is running
+# - do not check return string if may be halted in bp
+lkd_continue
+
+## ==================================
+#  BOARD: insmod...
+## ==================================
+send_board_return "modprobe stmfb"
+module_load "fake_alsa"
+
+remote_send board_stmc "lsmod\n"
+remote_expect board_stmc 20 {
+    -re ".*fake_alsa.*\[0-9\]+.*.*root@.*:~#" { pass "load kernel module" }
+    -re ".*root@.*:~#" { fail "load kernel module" }
+    timeout { fail "load kernel module (timeout)" }
+}
+
+## ==================================
+#  GDB: re-enable vm translation
+## ==================================
+lkd_ctrlc_nodbg
+
+send_gdb "set linux-awareness enable_vm_translation 1\n"
+gdb_expect {
+    -re "$gdb_prompt $" { pass "enable VM translation" }
+    timeout { fail "enable VM translation (timeout)" }
+}
+
+send_gdb "x /20i 0xbf000000\n"
+gdb_expect {
+    -re ".*mov*.r12,.*sp.*$gdb_prompt $" { pass "got function prolog in first vm code page of module." }
+    -re "$gdb_prompt $" { fail "access vm code page in module" }
+    timeout { fail "access vm code page in module (timeout)" }
+}
+
+kernel_exit
+lkd_exit

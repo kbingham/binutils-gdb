@@ -1,0 +1,65 @@
+# This file was written by Mathieu Auvray
+# test:		backtrace.exp
+# author:	marc titinger
+# date:		22/07/2011
+# title:	LKD basic connectivity test
+#
+# description:  LKD basic connectivity test
+#
+#############################################################################
+
+load_lib lkd.exp
+global gdb_prompt
+global timeout
+
+if $tracelevel then {
+    strace $tracelevel
+}
+
+reset_stmc
+
+#
+# test running programs
+#
+set curdir $env(PWD)
+lkd_exit
+set res [lkd_start]
+if { $res < 0 } {
+    error "Error during the boot of the board"
+    return "Error during the boot of the board"
+}
+kernel_connect
+
+##
+#  test Ctrl+c / command / continue
+##
+lkd_ctrlc_nodbg
+send_gdb "bt\n"
+lkd_continue
+
+##
+#  test sending a command to the board
+##
+send_board "cat /proc/cpuinfo "
+remote_expect board_stmc 60 {
+   -re "\[\r\n\]*.*BogoMIPS.*" { pass "got cpu info from board." }
+   -re "\[\r\n\]*.*bogomips.*" { pass "got cpu info from board." }
+    timeout { fail "Failed to get cpu info from board." }
+}
+
+##
+#  do it again
+##
+lkd_ctrlc_nodbg
+send_gdb "bt\n"
+lkd_continue
+send_board "cat /proc/cpuinfo "
+remote_expect board_stmc 60 {
+   -re "\[\r\n\]*.*Hardware.*" { pass "got cpu info from board." }
+   -re "\[\r\n\]*.*machine.*" { pass "got cpu info from board." }
+    timeout { fail "Failed to get cpu info from board." }
+}
+
+kernel_exit
+lkd_ctrlc_nodbg
+lkd_exit

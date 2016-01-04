@@ -1,0 +1,3 @@
+#!/bin/sh
+mknod /dev/STM-trace_dev c 252 0 
+kptrace -S /dev/STM-trace_dev

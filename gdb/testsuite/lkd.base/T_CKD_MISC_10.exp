@@ -1,0 +1,40 @@
+#
+# author:	marc titinger
+# date:		22/07/2011
+#
+# REF:  https://codex.cro.st.com/wiki/index.php?pagename=CKD_validation_plan&group_id=2104#T_CKD_MISC_10_:_dmesg
+#
+#############################################################################
+
+load_lib lkd.exp
+global gdb_prompt
+
+if $tracelevel then {
+    strace $tracelevel
+}
+
+set curdir $env(PWD)
+lkd_exit
+set res [lkd_start]
+if { $res < 0 } {
+    error "Error during the boot of the board"
+    return "Error during the boot of the board"
+}
+
+kernel_connect
+
+verbose "T_CKD_MISC_10: test command dmesg" 1
+
+##
+#  test Ctrl+c / command / continue
+##
+lkd_ctrlc_nodbg
+send_gdb "dmesg\n"
+gdb_expect {
+   -re "\[\r\n\]*.*Freeing init memory.*" { pass "got 'Freeing memory' string."}
+   -re "\[\r\n\]*.*Freeing unused kernel memory.*" { pass "got 'Freeing memory' string."}
+    timeout { fail "dmesg fails, or board not booted ok." }
+}
+
+kernel_exit
+lkd_exit

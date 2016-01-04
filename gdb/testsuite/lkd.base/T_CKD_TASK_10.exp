@@ -1,0 +1,66 @@
+#
+# author:	marc titinger
+# date:		22/07/2011
+#
+# REF:  https://codex.cro.st.com/wiki/index.php?pagename=CKD_validation_plan&group_id=2104#T_CKD_TASK_10_:_pmap_a_halted_process
+#
+#############################################################################
+
+load_lib lkd.exp
+global gdb_prompt
+global timeout
+
+if $tracelevel then {
+    strace $tracelevel
+}
+
+#
+# REBOOT THE BOARD
+#
+set curdir $env(PWD)
+lkd_exit
+set res [lkd_start]
+if { $res < 0 } {
+    error "Error during the boot of the board"
+    return "Error during the boot of the board"
+}
+
+kernel_connect
+
+verbose "T_CKD_TASK_10 : pmap a halted process" 1
+
+##
+#  set bp in sys_open
+##
+lkd_ctrlc_nodbg
+
+send_gdb "break sys_read\n"
+gdb_expect {
+    -re "Breakpoint.*fs/read_write.c.*$gdb_prompt $" { pass "SET BP at sys_read ok" }
+    -re "Breakpoint.*at 0x.*$gdb_prompt $" { pass "SET BP at sys_read ok" }
+     timeout { fail "SET BP at sys_read" }
+}
+
+# check list for sending commands to the board:
+# - better sending while the board is running
+# - do not check return string if may be halted in bp
+lkd_continue
+
+remote_send board_stmc "top -d 1 &\n"
+gdb_expect {
+    -re ".*Breakpoint.*sys_read.*$gdb_prompt $" { pass "HIT sys_read" }
+     timeout { fail "HIT sys_read" }
+}
+
+##
+#  execute pmap
+##
+send_gdb "pmap\n"
+gdb_expect {
+    -re "Start.*writeable.*$gdb_prompt $" { pass "GOT PMAP" }
+    -re ".*set linux-awareness loaded.*" { unresolved "test ignored, no symbols in this kernel ?" }
+     timeout { fail "GOT PMAP" }
+}
+
+kernel_exit
+lkd_exit

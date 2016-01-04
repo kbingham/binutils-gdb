@@ -1,0 +1,85 @@
+#
+# author:	marc titinger
+# date:		22/07/2011
+#
+# REF:  https://codex.cro.st.com/wiki/index.php?pagename=KMD_validation_plan&group_id=2104#T_KMD_SYMPATH_30_:_finding_the_symbols_using_modules-search-path
+#
+#############################################################################
+
+load_lib lkd.exp
+global gdb_prompt
+global timeout
+
+if $tracelevel then {
+    strace $tracelevel
+}
+
+#
+# REBOOT THE BOARD
+#
+set curdir $env(PWD)
+lkd_exit
+set res [lkd_start]
+if { $res < 0 } {
+    error "Error during the boot of the board"
+    return "Error during the boot of the board"
+}
+
+kernel_connect
+
+verbose "T_KMD_SYMPATH_30 : finding the symbols using modules-search-path" 1
+
+## ==================================
+#  HOST: install the test module (to /tmp)
+## ==================================
+
+remote_exec build "make -C $kdir M=$curdir/modules/demo_app"
+module_install "$curdir/modules/demo_app/fake_alsa.ko"
+
+## ==================================
+#  GDB: enabled modules debugging
+## ==================================
+lkd_ctrlc_nodbg
+
+send_gdb "b fake_alsa_init\n"
+gdb_expect {
+    -re ".*ending.*$gdb_prompt $" { pass "installed pending fake_alsa_init bp" }
+    timeout { fail "pending fake_alsa_init bp" }
+}
+
+send_gdb "show module-search-path\n"
+gdb_expect {
+    -re ".*$sysroot.*$gdb_prompt $" { pass "show module-search-path ok" }
+    timeout { fail "unabled to test module-search-path" }
+}
+
+send_gdb "maint i b \n"
+gdb_expect {
+    -re ".*fake_alsa_init.*$gdb_prompt $" { pass "verified pending fake_alsa_init bp" }
+    timeout { fail "pending fake_alsa_init bp" }
+}
+
+lkd_continue
+
+## ==================================
+#  BOARD: insmod...
+## ==================================
+
+# check list for sending commands to the board:
+# - better sending while the board is running
+# - do not check return string if may be halted in bp
+# - if you check the return, use remote_expect...
+#
+
+#module_load_checked "fake_alsa" 1
+send_module_load "fake_alsa"
+check_module_load "fake_alsa" 1
+
+gdb_expect {
+    -re ".*fake_alsa_init.*$gdb_prompt $" { pass "Resolving breakpoint and stopping on it" }
+    timeout { fail "Breakpoint not hit"
+              lkd_ctrlc }
+}
+
+kernel_exit
+lkd_exit

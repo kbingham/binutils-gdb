@@ -1,0 +1,8 @@
+#!/bin/sh
+
+filename=traces-`date '+%H-%M'`.tar.bz2
+
+tar cjvf $filename kptrace*.kp*
+sz  $filename
+
+

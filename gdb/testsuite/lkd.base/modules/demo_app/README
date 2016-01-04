@@ -1,0 +1,27 @@
+This software is meant to provide a basic demo case of the kptrace 
+tracing tool. 
+
+fake_alsa.c is a driver that simulates a hardware contention that leads
+to a delay in a blocking read completion, and hence to a sensible flaw 
+in the realtime processing.  
+
+fake_app.c is the client application of the driver, is creates a reader
+thread that waits for data buffers doing blocking reads, and a processing
+thread that speeps until new available buffers are notfied by a semaphore. 
+
+env.sh.exemple is a sample script for setting the build variables for 
+the sh4 toolset. 
+
+env.arm.exemple is a sample script for setting the build variables for 
+the ARM toolset.
+
+my_makedev is a helper script to be called after a character driver
+was loaded, in order to create the device files in /dev. 
+example: my_makedev bob   creates /dev/bob_dev, provides bob.ko 
+waas loaded, and "bob" shows up in /proc/devices. notice that sed 
+must be available in the linux distro (not the basic one from busybox). 
+
+
+build for intel, native : $>make
+build for ARM : source env.arm.exemple ; make other
+build for sh : source env.sh.exemple ; make other

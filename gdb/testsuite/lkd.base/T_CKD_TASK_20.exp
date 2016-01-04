@@ -1,0 +1,73 @@
+#
+# author:	marc titinger
+# date:		22/07/2011
+#
+# REF:  https://codex.cro.st.com/wiki/index.php?pagename=CKD_validation_plan&group_id=2104#T_CKD_TASK_20_:_vm_translate
+#
+#############################################################################
+
+load_lib lkd.exp
+global gdb_prompt
+global timeout
+
+if $tracelevel then {
+    strace $tracelevel
+}
+
+#
+# REBOOT THE BOARD
+#
+set curdir $env(PWD)
+lkd_exit
+set res [lkd_start]
+if { $res < 0 } {
+    error "Error during the boot of the board"
+    return "Error during the boot of the board"
+}
+
+kernel_connect
+
+verbose "T_CKD_TASK_20 : vm_translate -- Translate a virtual address to a physical one" 1
+
+##
+#  force both core to be busy un usermode
+##
+
+lkd_ctrlc_nodbg
+
+##
+#  some control dump
+##
+send_gdb "pgtable\n"
+send_gdb "i thr\n"
+gdb_expect {
+    -re ".*\\s+\[0-9\]+\\s+init \\(pid: 1 tgid: 1\\).*$gdb_prompt $" { pass "GOT THREAD_LIST" }
+     timeout { fail "GOT THREAD_LIST" ; exit }
+}
+
+send_gdb "break sys_read\n"
+gdb_expect {
+    -re "Breakpoint.*fs/read_write.c.*$gdb_prompt $" { pass "SET BP at sys_read ok" }
+    -re "Breakpoint.*at 0x.*$gdb_prompt $" { pass "SET BP at sys_read ok" }
+     timeout { fail "SET BP at sys_read" }
+}
+
+# check list for sending commands to the board:
+# - better sending while the board is running
+# - do not check return string if may be halted in bp
+#
+lkd_continue
+remote_send board_stmc "cat /proc/zoneinfo"
+
+gdb_expect {
+    -re "Switching to.*Breakpoint.*, sys_read.*$gdb_prompt $" { pass "HIT sys_read" }
+     timeout { fail "HIT sys_read" ; exit }
+}
+
+##
+#  execute vm_translate
+##
+gdb_test "vm_translate buf" "Virtual address.*translates to physical address.*" "vm_translate"
+
+kernel_exit
+lkd_exit
