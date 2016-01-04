@@ -738,6 +738,12 @@ lkd_proc_get_by_ptid (ptid_t ptid)
 	  /*swapper, TID gives the core, lwp = 0 is not unique */
 	  tp = find_thread_ptid(ptid);
 
+  if (!tp) {
+	  warning(_("%s: Couldn't identify the thread for ptid:{%d,%ld,%ld}\n"), __FUNCTION__,
+		  ptid.pid, ptid.lwp, ptid.tid);
+	  return NULL;
+  }
+
   ps = (process_t *)tp->priv;
 
   /* Prune the gdb-thread is the process is not valid
