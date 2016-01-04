@@ -9068,7 +9068,10 @@ remote_mourn (struct target_ops *target)
 		 inferior_ptid so that bits of core GDB realizes
 		 there's something here, e.g., so that the user can
 		 say "kill" again.  */
-	      inferior_ptid = magic_null_ptid;
+	      add_current_inferior_and_thread (rs->buf);
+
+	      /* Get updated offsets, if the stub uses qOffsets.  */
+	      get_offsets ();
 	    }
 	}
     }
@@ -10334,7 +10337,7 @@ remote_rcmd (struct target_ops *self, const char *command,
       if (strcmp (buf, "OK") == 0)
 	break;
       if (strlen (buf) == 3 && buf[0] == 'E'
-	  && isdigit (buf[1]) && isdigit (buf[2]))
+	  && isxdigit (buf[1]) && isxdigit (buf[2]))
 	{
 	  error (_("Protocol error with Rcmd"));
 	}
