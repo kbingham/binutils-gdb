@@ -1820,6 +1820,10 @@ linux_aware_wait (struct target_ops *ops,
   struct cleanup *cleanup;
   ptid_t stop_ptid;
 
+  /* Disable the Linux Awareness AutoLoad feature for now, as it is buggy with Qemu */
+  if (lkd_private.loaded != LKD_LOADED)
+    return BENEATH->to_wait (ops, ptid, status, opts);
+
   if (thread_awareness_inhibited () || !(lkd_private.kflags & KFLAG_DBGINFO))
     return BENEATH->to_wait (ops, ptid, status, opts);
 
