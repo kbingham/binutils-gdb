@@ -4532,6 +4532,9 @@ linux_awareness_init (void)
   printf_filtered ("Enabling Linux Kernel Debugger %s build %s.\n",
 		   LKD_VERSION_STRING, __DATE__);
 
+  /* Set this as early as we can */
+  lkd_private.target_pointer_type = builtin_type (target_gdbarch())->builtin_data_ptr;
+
   /* Init some data structures. */
   linux_awareness_fix_debug_info ();
 
