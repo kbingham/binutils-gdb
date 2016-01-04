@@ -7063,6 +7063,8 @@ remote_wait (struct target_ops *ops,
 {
   ptid_t event_ptid;
 
+  printf_filtered("%s: remote wait starting...\n", __FUNCTION__);
+
   if (target_is_non_stop_p ())
     event_ptid = remote_wait_ns (ptid, status, options);
   else
@@ -7075,6 +7077,8 @@ remote_wait (struct target_ops *ops,
       if (!QUEUE_is_empty (stop_reply_p, stop_reply_queue))
 	mark_async_event_handler (remote_async_inferior_event_token);
     }
+
+  printf_filtered("%s: remote wait completed... Continuing...\n", __FUNCTION__);
 
   observer_notify_target_thread_changed (event_ptid);
 
