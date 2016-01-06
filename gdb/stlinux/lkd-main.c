@@ -1099,7 +1099,7 @@ linux_aware_thread_name (struct target_ops * ops, struct thread_info * thread)
 	return NULL;
 }
 
-/* target_ops callback querid by GDB to read the registers of the
+/* target_ops callback queried by GDB to read the registers of the
  currently selected task. */
 static void
 linux_aware_fetch_registers (struct target_ops *ops,
@@ -1129,7 +1129,7 @@ linux_aware_fetch_registers (struct target_ops *ops,
   return;
 }
 
-/* target_ops callback querid by GDB to write the registers of the
+/* target_ops callback queried by GDB to write the registers of the
  currently selected task. */
 static void
 linux_aware_store_registers (struct target_ops *ops,
