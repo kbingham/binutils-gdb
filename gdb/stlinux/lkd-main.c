@@ -764,7 +764,6 @@ linux_aware_translate_address_safe (CORE_ADDR * addr, int silent)
   return 1;
 }
 
-#if UNUSED
 /* Asks the platform specific layer if ADDR lies in a writable
  mapping. */
 static int
@@ -777,7 +776,6 @@ page_writable (CORE_ADDR addr)
 					    lkd_proc_get_by_ptid
 					    (inferior_ptid)->task_struct);
 }
-#endif
 
 /****************************************************************************/
 
@@ -1410,10 +1408,10 @@ linux_aware_remove_hw_breakpoint (struct target_ops *ops,
   return ret;
 }
 
-#if UNUSED
+
 /* Linux will copy to memory userspace pages when they are first
- accessed. It means that the user can request to diaply the contents
- of a memory location that isn't yet availble in RAM. However, if
+ accessed. It means that the user can request to display the contents
+ of a memory location that isn't yet available in RAM. However, if
  that address corresponds to a file mapping and if the
  target-root-prefix is set, then the debugger ought to be able to
  find the memory contents directly in the corresponding file. This
@@ -1552,7 +1550,7 @@ get_file_mapped_data (CORE_ADDR addr, gdb_byte * myaddr, int len)
     return -1;
 
   /* Walk the list of vmas for the current process and find the one
-     correponding to the requested address. */
+     Corresponding to the requested address. */
   mmap = read_pointer_field (mm, mm_struct, mmap);
   while (mmap)
     {
@@ -1626,98 +1624,7 @@ get_file_mapped_data (CORE_ADDR addr, gdb_byte * myaddr, int len)
 
   return -1;
 }
-#endif // Unused function
 
-
-#if DEPRECATED
-/* This is the target_ops callback that is called by GDB to access
- memory. After having prepared the access, it calls back to the
- real underlying target_ops to do the work. */
-static int
-linux_aware_deprecated_xfer_memory (CORE_ADDR memaddr,
-				    gdb_byte * myaddr,
-				    int len, int write,
-				    struct mem_attrib *attrib,
-				    struct target_ops *target)
-{
-  int res = 0;
-  CORE_ADDR page_end, orig_addr = memaddr;
-  int page_incr = 1 << linux_awareness_ops->page_shift;
-  static uint32_t countt = 0;
-
-  /* protect against too early accesses to RAM with "-ex" command
-   * typically, while targetpack is not yet configured.
-   */
-  if (!BENEATH->deprecated_xfer_memory)
-    {
-      DEBUG (D_INIT, 1,
-	     "failed trying to %s @0x%lx while not accessing target\n",
-	     (write ? "WRITE" : "READ"), (unsigned long) memaddr);
-      return 0;
-    }
-
-  /*just don't deal with it if we're not yet loaded !
-   **/
-  if (lkd_private.loaded != LKD_LOADED)
-    return BENEATH->deprecated_xfer_memory (memaddr, myaddr, len,
-					    write, attrib, target);
-
-  DEBUG (TARGET, 2,
-	 "LA_deprecated_xfer_memory(%d):\t%s %i bytes @ 0x%lx\n",
-	 countt++, (write ? "WRITE" : "READ"), len, (unsigned long) memaddr);
-
-  if (!write && memaddr < 4096)
-    {
-      /* Just avoid those buggy accesses to the zero page. Nothing
-         can come from there. */
-      memset (myaddr, 0, len);
-      return len;
-    }
-
-  if (!linux_aware_translate_address_safe (&memaddr, 0))
-    {
-
-      /* Can't translate the address, but maybe we can get the
-         contents from an underlying file. */
-      if (!write)
-	{
-	  res = get_file_mapped_data (memaddr, myaddr, len);
-
-	  if (res >= 0)
-	    return res;
-	}
-
-      /* Don't report an error, but do what GDB would do on
-       * memory access error : read zero and do nothing on
-       * write. The error has been reported to the user. If we
-       * report an error, then the target beneath will be called
-       * and do useless things. See target.c:target_xfer_memory
-       **/
-      if (!write)
-	memset (myaddr, 0, len);
-
-      return len;
-    }
-
-  /* Read at most one page: contiguous virtual address spaces
-     doesn't map to contiguous physical memory.
-     The calling memory access code will handle the loop for us. */
-  page_end = (orig_addr & ~(CORE_ADDR) (page_incr - 1)) + page_incr;
-  len = min (len, (int) (page_end - orig_addr));
-
-  if (orig_addr != memaddr && (write || page_writable (orig_addr)))
-    /* Flush the virtual address cache line. */
-    linux_awareness_ops->lo_flush_cache (orig_addr, memaddr, len, write);
-
-  res = BENEATH->deprecated_xfer_memory (memaddr, myaddr, len, write,
-					 attrib, target);
-  if (orig_addr != memaddr)
-    /* Flush the aliased physical address cache line. */
-    linux_awareness_ops->lo_flush_cache (memaddr, memaddr, len, write);
-
-  return res;
-}
-#endif // DEPRECATED
 
 
 static enum target_xfer_status
@@ -1726,13 +1633,98 @@ linux_aware_xfer_partial (struct target_ops *ops, enum target_object object,
 			  const gdb_byte * writebuf, ULONGEST offset,
 			  ULONGEST len, ULONGEST *xfered_len)
 {
-  if (BENEATH->to_xfer_partial)
-    return BENEATH->to_xfer_partial (ops, object, annex, readbuf, writebuf,
-				     offset, len, xfered_len);
+    int res = 0;
+    enum target_xfer_status status;
+    static int countt = 0;
+    CORE_ADDR page_end, orig_addr = offset;
+    int page_incr = 1 << linux_awareness_ops->page_shift;
+    int write = (writebuf ? 1 : 0);
 
-  error(_("Need to call a 'default xfer partial here..."));
+    gdb_assert( !(readbuf && writebuf) );
 
-  return TARGET_XFER_UNAVAILABLE;
+    /* protect against too early accesses to RAM with "-ex" command
+     * typically, while targetpack is not yet configured.
+     */
+    if (!BENEATH->to_xfer_partial)
+      {
+        DEBUG (D_INIT, 1,
+	     "failed trying to %s %lld bytes @0x%lx while not accessing target\n",
+	     (writebuf ? "WRITE" : "READ"), len, (unsigned long) offset );
+
+        return TARGET_XFER_UNAVAILABLE;
+      }
+
+    /*just don't deal with it if we're not yet loaded !
+     **/
+    if (lkd_private.loaded != LKD_LOADED)
+      return BENEATH->to_xfer_partial (ops, object, annex, readbuf, writebuf,
+					offset, len, xfered_len);
+
+    DEBUG (TARGET, 2,
+	 "linux_aware_xfer_partial(%d):\t%s %lld bytes @ 0x%lx\n",
+	 countt++, (writebuf ? "WRITE" : "READ"), len, (unsigned long) offset);
+
+    if (readbuf && offset < 4096)
+      {
+	/* Perhaps overkill... */
+	if (offset + len > 4096)
+	    len -= (offset + len) & (4096 - 1);
+
+        /* Just avoid those buggy accesses to the zero page. Nothing
+           can come from there. */
+        memset (readbuf, 0, len);
+        *xfered_len = len;
+        return TARGET_XFER_OK;
+      }
+
+    if (!linux_aware_translate_address_safe ((CORE_ADDR*)&offset, 0))
+      {
+
+        /* Can't translate the address, but maybe we can get the
+           contents from an underlying file. */
+        if (readbuf)
+	{
+	  res = get_file_mapped_data (offset, readbuf, len);
+
+	  if (res >= 0)
+	    return TARGET_XFER_UNAVAILABLE;
+	}
+
+        /* Don't report an error, but do what GDB would do on
+         * memory access error : read zero and do nothing on
+         * write. The error has been reported to the user. If we
+         * report an error, then the target beneath will be called
+         * and do useless things. See target.c:target_xfer_memory
+         **/
+        if (readbuf)
+            memset (readbuf, 0, len);
+
+        return len;
+      }
+
+    /* Read at most one page: contiguous virtual address spaces
+       doesn't map to contiguous physical memory.
+       The calling memory access code will handle the loop for us. */
+    page_end = (orig_addr & ~(CORE_ADDR) (page_incr - 1)) + page_incr;
+    len = min (len, (int) (page_end - orig_addr));
+
+    /* KPB-Porting: This following statement can never be true????
+     * The orig_addr is set to offset above and never modified after
+     * Never mind - The lo_flush_cache isn't even implemented on lkd-arm yet ...
+     * So it looks like this has come from SH ? */
+    if (orig_addr != offset && (writebuf || page_writable (orig_addr)))
+	/* Flush the virtual address cache line. */
+	linux_awareness_ops->lo_flush_cache (orig_addr, offset, len, write);
+
+
+    status = BENEATH->to_xfer_partial (ops, object, annex, readbuf, writebuf,
+				offset, len, xfered_len);
+
+    if (orig_addr != offset)
+	/* Flush the aliased physical address cache line. */
+	linux_awareness_ops->lo_flush_cache (offset, offset, len, write);
+
+    return status;
 }
 
 /* If the system gets low on memory, we simply disable userspace
