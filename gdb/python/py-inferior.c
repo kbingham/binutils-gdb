@@ -705,6 +705,51 @@ get_char_buffer (PyObject *self, Py_ssize_t segment, char **ptrptr)
 
 #endif	/* IS_PY3K */
 
+/* This creates a new thread object for the thread list, and adds it
+ * The action of adding it will invoke the observer, and it will be updated
+ * in the object list of this inferior automatically.
+ */
+
+static PyObject *
+infpy_add_thread (PyObject *self, PyObject *args)
+{
+    struct thread_info *tp;
+    int pid;
+    long tid;
+    long lwp;
+    void * target_data = NULL; // We may need to store some more data... / caching
+    ptid_t ptid;
+
+    struct cleanup *cleanup;
+
+    cleanup = ensure_python_env (python_gdbarch, python_language);
+
+    // Verify that the ARG is a tuple of size three.
+    /// Preferably of type PTID_OBJ ... except that doesn't exist yet.
+
+    //PyTuple_GET_ITEM(args, 0);
+    if (!PyArg_ParseTuple (args, "(ill)", &pid, &lwp, &tid))
+    {
+	printf("Failed to parse args ... %d, %ld, %ld\n", pid, lwp, tid);
+    }
+
+    // Verify type of parameter passed, or complain
+    // And verify that the ptid.pid == self.ptid.pid ? or just ignore what was passed in?
+
+    // build ptid
+    ptid = ptid_build(pid, lwp, tid);
+
+    // Add thread
+    tp = add_thread_with_info(ptid, target_data);
+
+    // Callbacks should have added a new thread object if successful ... try to return that?
+
+    do_cleanups (cleanup);
+
+    Py_RETURN_NONE;
+}
+
+
 /* Implementation of
    gdb.search_memory (address, length, pattern).  ADDRESS is the
    address to start the search.  LENGTH specifies the scope of the
@@ -936,7 +981,12 @@ Write the given buffer object to the inferior's memory." },
     METH_VARARGS | METH_KEYWORDS,
     "search_memory (address, length, pattern) -> long\n\
 Return a long with the address of a match, or None." },
-  { NULL }
+  { "add_thread", (PyCFunction) infpy_add_thread,
+    METH_VARARGS,
+    "add_thread (thread)\n\
+Informs the inferior of a new thread in it's process space." },
+
+  { NULL } /* Sentinel */
 };
 
 PyTypeObject inferior_object_type =
