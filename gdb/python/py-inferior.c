@@ -705,6 +705,28 @@ get_char_buffer (PyObject *self, Py_ssize_t segment, char **ptrptr)
 
 #endif	/* IS_PY3K */
 
+/* This creates a new thread object for the thread list, and adds it
+ * The action of adding it will invoke the observer, and it will be updated
+ * in the object list of this inferior automatically.
+ */
+
+static PyObject *
+infpy_create_thread (PyObject *self, PyObject *args)
+{
+    struct thread_info *tp;
+    static int tid = 100;
+    static int pid = 4;
+    ptid_t ptid = {42000, pid++, tid++};
+    printf("Hello world\n");
+
+    tp = add_thread(ptid);
+
+
+
+    Py_RETURN_NONE;
+}
+
+
 /* Implementation of
    gdb.search_memory (address, length, pattern).  ADDRESS is the
    address to start the search.  LENGTH specifies the scope of the
@@ -936,6 +958,10 @@ Write the given buffer object to the inferior's memory." },
     METH_VARARGS | METH_KEYWORDS,
     "search_memory (address, length, pattern) -> long\n\
 Return a long with the address of a match, or None." },
+{ "create_thread", (PyCFunction) infpy_create_thread,
+    METH_VARARGS | METH_KEYWORDS,
+    "create_thread (thread)\n\
+Informs the inferior of a new thread in it's process space." },
   { NULL }
 };
 
