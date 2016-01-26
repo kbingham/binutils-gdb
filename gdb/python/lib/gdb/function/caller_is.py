@@ -17,6 +17,7 @@
 import gdb
 import re
 
+
 class CallerIs(gdb.Function):
     """Check the calling function's name.
 
@@ -39,7 +40,7 @@ Returns:
     def __init__(self):
         super(CallerIs, self).__init__("_caller_is")
 
-    def invoke(self, name, nframes = 1):
+    def invoke(self, name, nframes=1):
         if nframes < 0:
             raise ValueError("nframes must be >= 0")
         frame = gdb.selected_frame()
@@ -49,6 +50,7 @@ Returns:
                 return False
             nframes = nframes - 1
         return frame.name() == name.string()
+
 
 class CallerMatches(gdb.Function):
     """Compare the calling function's name with a regexp.
@@ -72,7 +74,7 @@ Returns:
     def __init__(self):
         super(CallerMatches, self).__init__("_caller_matches")
 
-    def invoke(self, name, nframes = 1):
+    def invoke(self, name, nframes=1):
         if nframes < 0:
             raise ValueError("nframes must be >= 0")
         frame = gdb.selected_frame()
@@ -82,6 +84,7 @@ Returns:
                 return False
             nframes = nframes - 1
         return re.match(name.string(), frame.name()) is not None
+
 
 class AnyCallerIs(gdb.Function):
     """Check all calling function's names.
@@ -105,18 +108,19 @@ Returns:
     def __init__(self):
         super(AnyCallerIs, self).__init__("_any_caller_is")
 
-    def invoke(self, name, nframes = 1):
+    def invoke(self, name, nframes=1):
         if nframes < 0:
             raise ValueError("nframes must be >= 0")
         frame = gdb.selected_frame()
         while nframes >= 0:
             if frame.name() == name.string():
-                return True 
+                return True
             frame = frame.older()
             if frame is None:
                 return False
             nframes = nframes - 1
         return False
+
 
 class AnyCallerMatches(gdb.Function):
     """Compare all calling function's names with a regexp.
@@ -140,7 +144,7 @@ Returns:
     def __init__(self):
         super(AnyCallerMatches, self).__init__("_any_caller_matches")
 
-    def invoke(self, name, nframes = 1):
+    def invoke(self, name, nframes=1):
         if nframes < 0:
             raise ValueError("nframes must be >= 0")
         frame = gdb.selected_frame()
