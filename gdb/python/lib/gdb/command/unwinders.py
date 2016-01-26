@@ -71,7 +71,7 @@ class InfoUnwinder(gdb.Command):
 
     def __init__(self):
         super(InfoUnwinder, self).__init__("info unwinder",
-                                            gdb.COMMAND_STACK)
+                                           gdb.COMMAND_STACK)
 
     def list_unwinders(self, title, unwinders, name_re):
         """Lists the unwinders whose name matches regexp.
