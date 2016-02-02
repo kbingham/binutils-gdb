@@ -26,6 +26,11 @@
 
 #include "py-target.h"
 
+// Keep eclipse happy
+#ifndef NULL
+#define NULL ((void*)0)
+#endif
+
 extern PyTypeObject target_object_type
     CPYCHECKER_TYPE_OBJECT_FOR_TYPEDEF ("target_object");
 
@@ -408,6 +413,30 @@ static void py_target_register_ops(struct target_ops * ops)
     ops->to_has_stack = default_child_has_stack;
     ops->to_has_registers = default_child_has_registers;
     ops->to_has_execution = default_child_has_execution;
+
+#if 0
+    ravenscar_ops.to_shortname = "ravenscar";
+    ravenscar_ops.to_longname = "Ravenscar tasks.";
+    ravenscar_ops.to_doc = "Ravenscar tasks support.";
+    ravenscar_ops.to_resume = ravenscar_resume;
+    ravenscar_ops.to_wait = ravenscar_wait;
+    ravenscar_ops.to_fetch_registers = ravenscar_fetch_registers;
+    ravenscar_ops.to_store_registers = ravenscar_store_registers;
+    ravenscar_ops.to_prepare_to_store = ravenscar_prepare_to_store;
+    ravenscar_ops.to_thread_alive = ravenscar_thread_alive;
+    ravenscar_ops.to_update_thread_list = ravenscar_update_thread_list;
+    ravenscar_ops.to_pid_to_str = ravenscar_pid_to_str;
+    ravenscar_ops.to_extra_thread_info = ravenscar_extra_thread_info;
+    ravenscar_ops.to_get_ada_task_ptid = ravenscar_get_ada_task_ptid;
+    ravenscar_ops.to_mourn_inferior = ravenscar_mourn_inferior;
+    ravenscar_ops.to_has_all_memory = default_child_has_all_memory;
+    ravenscar_ops.to_has_memory = default_child_has_memory;
+    ravenscar_ops.to_has_stack = default_child_has_stack;
+    ravenscar_ops.to_has_registers = default_child_has_registers;
+    ravenscar_ops.to_has_execution = default_child_has_execution;
+    ravenscar_ops.to_stratum = thread_stratum;
+    ravenscar_ops.to_magic = OPS_MAGIC;
+#endif
 
     ops->to_magic = OPS_MAGIC;
 
