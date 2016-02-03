@@ -63,6 +63,29 @@ extern PyTypeObject target_object_type
 	(type *)( (char *)__mptr - offsetof(type,member) );})
 #endif
 
+/* Target layer inhibition to prevent re-entrant calls */
+
+static void
+target_exhibit(void * arg)
+{
+    target_object * self = (target_object *)arg;
+    --self->inhibited;
+}
+
+static struct cleanup *
+target_inhibit(target_object * self)
+{
+    self->inhibited++;
+
+    return make_cleanup(target_exhibit, self);
+}
+
+static int
+target_inhibited(target_object * self)
+{
+    return self->inhibited;
+}
+
 /* Large spacing between sections during development for clear divisions */
 
 /*****************************************************************************
@@ -310,9 +333,20 @@ py_target_to_update_thread_list (struct target_ops *ops)
 
     HasMethodOrReturnBeneath(self, to_update_thread_list, ops);
 
+    /* This functionality is not reentrant */
+    if (target_inhibited(target_obj))
+	return;
+
+
     /* Above method returns if no method provided by the python object */
 
     cleanup = ensure_python_env (get_current_arch (), current_language);
+
+    /* Part of updating the thread list will involve checking the thread list.
+     * To prevent a recursive chain of never ending calls, we need to prevent
+     * us from calling ourselves recursively, by temporarily 'disabling' the
+     * layer until the next cleanup runs */
+    target_inhibit(target_obj);
 
     TRY
     {
@@ -544,6 +578,9 @@ target_init (PyObject *self, PyObject *args, PyObject *kw)
 {
     target_object *target_obj = (target_object *) self;
     struct target_ops *ops = &target_obj->ops;
+
+    /* Mechanism to prevent re-entrant calls */
+    target_obj->inhibited = 0;
 
     py_target_register_ops(ops);
 

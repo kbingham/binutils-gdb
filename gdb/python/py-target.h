@@ -29,6 +29,7 @@ typedef struct
   /* The target operations we represent.  */
   struct target_ops ops;
 
+  int inhibited;
 } target_object;
 
 #endif /* GDB_PY_TARGET_H */
