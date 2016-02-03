@@ -721,7 +721,8 @@ ALL_TARGET_OBS = \
 	symfile-mem.o \
 	windows-tdep.o \
 	linux-record.o \
-	ravenscar-thread.o
+	ravenscar-thread.o \
+	lkd-main.o lkd-process.o
 
 # Host-dependent makefile fragment comes in here.
 @host_makefile_frag@
@@ -988,7 +989,7 @@ common/common-exceptions.h target/target.h common/symbol.h \
 common/common-regcache.h fbsd-tdep.h nat/linux-personality.h \
 common/fileio.h nat/x86-linux.h nat/x86-linux-dregs.h nat/amd64-linux-siginfo.h\
 nat/linux-namespaces.h arch/arm.h common/gdb_sys_time.h arch/aarch64-insn.h \
-tid-parse.h
+tid-parse.h lkd/lkd.h lkd/lkd-process.h
 
 # Header files that already have srcdir in them, or which are in objdir.
 
@@ -1355,6 +1356,7 @@ init.c: $(INIT_FILES)
 	    -e '/[a-z0-9A-Z_]*-exp.tab.[co]$$/d' \
 	    -e 's/\.[co]$$/.c/' \
 	    -e 's,signals\.c,common/signals\.c,' \
+	    -e 's,\(lkd-.*\.c\),lkd/\1,' \
 	    -e 's|^\([^  /][^     ]*\)|$(srcdir)/\1|g' | \
 	while read f; do \
 	    sed -n -e 's/^_initialize_\([a-z_0-9A-Z]*\).*/\1/p' $$f 2>/dev/null; \
@@ -1754,7 +1756,8 @@ ALLDEPFILES = \
 	xcoffread.c \
 	xstormy16-tdep.c \
 	xtensa-tdep.c xtensa-config.c \
-	xtensa-linux-tdep.c xtensa-linux-nat.c xtensa-xtregs.c
+	xtensa-linux-tdep.c xtensa-linux-nat.c xtensa-xtregs.c \
+	lkd/lkd-main.c lkd/lkd-process.c
 
 # Some files need explicit build rules (due to -Werror problems) or due
 # to sub-directory fun 'n' games.
@@ -2714,6 +2717,20 @@ py-value.o: $(srcdir)/python/py-value.c
 
 py-varobj.o: $(srcdir)/python/py-varobj.c
 	$(COMPILE) $(PYTHON_CFLAGS) $(srcdir)/python/py-varobj.c
+	$(POSTCOMPILE)
+
+#
+# gdb/lkd/ dependencies
+#
+# Need to explicitly specify the compile rule as make will do nothing
+# or try to compile the object file into the sub-directory.
+
+lkd-main.o: $(srcdir)/lkd/lkd-main.c
+lkd-process.o: $(srcdir)/lkd/lkd-process.c
+
+# Generalised lkd-compile rule
+lkd-%:
+	$(COMPILE) $<
 	$(POSTCOMPILE)
 
 #
