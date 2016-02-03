@@ -198,6 +198,21 @@ AS_HELP_STRING([--enable-64-bit-bfd], [64-bit support (on hosts with narrower wo
   *)    AC_MSG_ERROR(bad value ${enableval} for 64-bit-bfd option) ;;
 esac],[want64=false])dnl
 
+# Check whether to support linux kernel aware debugging
+AC_ARG_ENABLE(linux-kernel-aware,
+AS_HELP_STRING([--enable-linux-kernel-aware], [enable linux kernel aware debugging]),
+  [case $enableval in
+    yes | no)
+      ;;
+    *)
+      AC_MSG_ERROR([bad value $enableval for --enable-linux-kernel-aware]) ;;
+  esac],
+  [enable_linux_kernel_aware=no])
+
+if test "${enable_linux_kernel_aware}" = "yes"; then
+  AC_DEFINE(ENABLE_LKD, 1, [Define to 1 if Linux Kernel Debug is enabled])
+fi
+
 # Provide defaults for some variables set by the per-host and per-target
 # configuration.
 gdb_host_obs=posix-hdep.o

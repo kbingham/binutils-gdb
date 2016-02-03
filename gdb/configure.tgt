@@ -725,3 +725,11 @@ for t in x ${gdb_target_obs}; do
     gdb_have_gcore=true
   fi
 done
+
+
+# Add linux kernel awareness obs and set no default OS ABI
+if test x"$enable_linux_kernel_aware" = xyes; then
+  gdb_target_obs="$gdb_target_obs lkd-main.o lkd-process.o"
+  gdb_osabi=
+fi
+
