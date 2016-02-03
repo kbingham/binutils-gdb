@@ -58,6 +58,46 @@ thpy_dealloc (PyObject *self)
   Py_TYPE (self)->tp_free (self);
 }
 
+static int
+thpy_compare(PyObject *self, PyObject *other)
+{
+    thread_object *thread_obj = (thread_object *) self;
+    ptid_t this_ptid, other_ptid;
+
+    int pid;
+    long lwp;
+    long tid;
+
+    int cmp = 0;
+
+    if (!PyArg_ParseTuple(other, "ill", &pid, &lwp, &tid))
+    {
+	PyErr_SetString (PyExc_RuntimeError, _("Invalid comparison."));
+	return -1;
+    }
+
+    this_ptid = thread_obj->thread->ptid;
+    other_ptid = ptid_build(pid, lwp, tid);
+
+#define CMP_THREE_WAY(a, b) ((a < b) ? -1 : (a > b))
+
+    cmp = CMP_THREE_WAY(this_ptid.pid, other_ptid.pid);
+    if (cmp)
+	return cmp;
+
+    cmp = CMP_THREE_WAY(this_ptid.lwp, other_ptid.lwp);
+    if (cmp)
+	return cmp;
+
+    cmp = CMP_THREE_WAY(this_ptid.tid, other_ptid.tid);
+    if (cmp)
+	return cmp;
+
+#undef CMP_THREE_WAY
+
+    return 0;
+}
+
 static PyObject *
 thpy_get_name (PyObject *self, void *ignore)
 {
@@ -351,7 +391,7 @@ PyTypeObject thread_object_type =
   0,				  /*tp_print*/
   0,				  /*tp_getattr*/
   0,				  /*tp_setattr*/
-  0,				  /*tp_compare*/
+  thpy_compare,			  /*tp_compare*/
   0,				  /*tp_repr*/
   0,				  /*tp_as_number*/
   0,				  /*tp_as_sequence*/
