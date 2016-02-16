@@ -3767,6 +3767,8 @@ linux_awareness_check (void)
   else
     warning ("debug information missing.");
 
+  lkd_private.kflags |= KFLAG_DBGINFO;
+
   return 1;			/* OK */
 }
 
