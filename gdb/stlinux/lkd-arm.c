@@ -487,6 +487,10 @@ arch_is_user_address (CORE_ADDR addr)
 static int
 arch_is_kernel_address (CORE_ADDR addr)
 {
+#ifndef HAS_MMU
+  return 1;
+#endif
+
   return !arch_is_user_address (addr) || is_special_addr (addr);
 }
 
