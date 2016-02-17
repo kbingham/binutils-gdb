@@ -164,11 +164,6 @@ struct linux_awareness_params
      with another command than the standard 'attach'. */
   lkd_load_states_t loaded;
 
-  /* let the user decide whether module init trigger debug info loading or not,
-   * as this can slow down the bootup of the system.
-   **/
-  int enable_module_load;	/*off by default */
-
   /* For debugging. One can disable the task handling
      issuing 'set linux-awareness enable_task_awareness 0' */
   int enable_task_awareness;
@@ -356,8 +351,6 @@ struct linux_awareness_ops
 extern struct target_ops linux_aware_ops;
 extern struct linux_awareness_ops *linux_awareness_ops;
 
-#define MODULES_VADDR_D  (16*1024*1024)	/*if not thumb2 kernel! */
-
 extern bfd *cur_bfd;
 
 struct type;
@@ -485,7 +478,6 @@ extern struct debug_domain linux_aware_debug_domains_info[];
 enum linux_aware_debug_domain
 {
   TASK,
-  MODULE,
   TARGET,
   D_INIT,
   FRAME,

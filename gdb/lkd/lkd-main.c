@@ -119,7 +119,6 @@ struct cmd_list_element *show_linux_awareness_cmd_list;
  associated log levels. */
 struct debug_domain linux_aware_debug_domains_info[] = {
   {"debug-task", 0},
-  {"debug-module", 0},
   {"debug-target", 0},
   {"debug-init", 0},
   {"debug-frame", 0},
@@ -132,7 +131,6 @@ struct debug_domain linux_aware_debug_domains_info[] = {
 struct linux_awareness_params lkd_params = {
   .enabled = 0,
   .loaded = LKD_NOTLOADED,
-  .enable_module_load = 0,
   .enable_task_awareness = 1,
   .auto_activate = 1,
   .skip_schedule_frame = 0, /*RnDCT0001394: changed default behavior*/
@@ -1234,10 +1232,6 @@ linux_aware_post_load (char *prog, int fromtty)
   if (linux_awareness_ops->lo_post_load)
     linux_awareness_ops->lo_post_load (prog, fromtty);
 
-  /* make sure the solib ops are installed if the user asked for
-   * support. */
-  if (lkd_params.enable_module_load)
-    enable_module_events_command (NULL, 0, NULL);
 }
 
 /* The target_ops callback called by GDB to load the debugged program
@@ -1424,7 +1418,6 @@ linux_aware_close (struct target_ops *ops)
       thread_event_low_mem_bp = NULL;
     }
 
-  lkd_modules_close ();
 
   lkd_proc_free_list ();
 
@@ -1831,15 +1824,6 @@ linux_aware_create_breakpoint_hook (struct breakpoint *bpt)
   if (lkd_private.loaded != LKD_LOADED)
     return;
 
-  /* defect 10646: install the solib hooks if the user adds a pending bp.
-   **/
-  if (((bpt->loc == NULL) && (lkd_private.kflags & KFLAG_DBGINFO))	/* pending */
-      || (lkd_params.enable_module_load == 1))
-    {				/* or explicitly turned on while no dbg-info */
-      lkd_params.enable_module_load = 1;
-      enable_module_events_command (NULL, 0, NULL);
-      execute_command ("sharedlibrary", 0);
-    }
 
   if (bpt->loc && bpt->loc->address == ~(CORE_ADDR) 0)
     {
@@ -2367,9 +2351,6 @@ lkd_loaded_set (char *arg, int from_tty, struct cmd_list_element *c)
 
       lkd_proc_set_symfile ();
 
-      /* read module list, if possible
-       * */
-      lkd_modules_build_list ();
 
       lkd_private.loaded = lkd_params.loaded;
     }
@@ -2538,8 +2519,6 @@ linux_awareness_init (void)
 
   set_gdbarch_inner_than (target_gdbarch (), linux_aware_inner_than);
 
-  /* set the solib ops */
-  lkd_modules_init ();
 
   add_info_alias ("tasks", "threads", 0);
   add_com_alias ("task", "thread", class_run, 0);
@@ -2607,11 +2586,6 @@ linux_awareness_init (void)
   if (c != NULL && c->theclass == class_user)
     execute_user_command (c, 0);
 
-  /* tune user experience:
-   * it's convenient to turn off the y/n query for pending bp
-   * to have a chance of silently resolve the symbol
-   */
-  pending_break_support = AUTO_BOOLEAN_TRUE;
 }
 
 /* Helper for the autoactivation symbol lookup. */
@@ -2750,8 +2724,6 @@ lkd_enabled_set (char *args, int from_tty, struct cmd_list_element *c)
       struct target_waitstatus dummy;
       struct thread_info *tp;
 
-      /* Make sure the hooks are removed if we toggle back to baremachine */
-      lkd_modules_close ();
 
       /* this will reinit the thread_list.
        * and record the current "loaded" status.
