@@ -250,7 +250,10 @@ enum frame_type
   ARCH_FRAME,
   /* Sentinel or registers frame.  This frame obtains register values
      direct from the inferior's registers.  */
-  SENTINEL_FRAME
+  SENTINEL_FRAME,
+  /* A sub-architecture entry point. the difference with ARCH_FRAME
+     is that we may want to unwind beyond this frame, and resolve symbols. */
+  KENTRY_FRAME
 };
 
 /* For every stopped thread, GDB tracks two frames: current and
