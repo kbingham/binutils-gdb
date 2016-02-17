@@ -721,7 +721,9 @@ gdbpy_initialize_frames (void)
 				  SIGTRAMP_FRAME) < 0
       || PyModule_AddIntConstant (gdb_module, "ARCH_FRAME", ARCH_FRAME) < 0
       || PyModule_AddIntConstant (gdb_module, "SENTINEL_FRAME",
-				  SENTINEL_FRAME) < 0)
+				  SENTINEL_FRAME) < 0
+      || PyModule_AddIntConstant (gdb_module, "KENTRY_FRAME",
+				  KENTRY_FRAME) < 0)
     return -1;
 
 #define SET(name, description) \

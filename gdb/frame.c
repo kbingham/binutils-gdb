@@ -364,6 +364,9 @@ fprint_frame_type (struct ui_file *file, enum frame_type type)
     case SENTINEL_FRAME:
       fprintf_unfiltered (file, "SENTINEL_FRAME");
       return;
+    case KENTRY_FRAME:
+      fprintf_unfiltered (file, "KENTRY_FRAME");
+      return;
     default:
       fprintf_unfiltered (file, "<unknown type>");
       return;
