@@ -47,8 +47,6 @@
 
 #include "tui/tui.h"
 
-#include "value.h"		/*KERN_310-dmesg */
-
 
 #include "lkd.h"
 #include "lkd-android.h"
@@ -2080,30 +2078,6 @@ pmap_command (char *args, int from_tty)
 
 
 
-long
-lkd_eval_long (char *string)
-{
-  volatile struct gdb_exception except;
-  struct expression *expr;
-  struct value *val;
-  unsigned char size;
-
-  TRY
-  {
-    expr = parse_expression (string);
-  }
-  CATCH (except, RETURN_MASK_ERROR)
-  {
-    return 0;
-  }
-  END_CATCH
-
-  val = evaluate_expression (expr);
-
-  return (long) value_as_long (val);
-}
-
-
 static char *
 get_banner_from_file (bfd * cur_bfd)
 {
@@ -2542,19 +2516,6 @@ linux_awareness_init (void)
 #ifdef HAS_PAGE_MONITORING
   add_com ("wait_page", class_lkd, wait_page_command,
 	   "Make the debugger stop when a given page is mapped to memory.");
-#endif
-
-#if HAS_SET_LOG_CHUNK_SIZE
-  add_setshow_uinteger_cmd ("log_chunk_size",
-			    class_stm,
-			    &log_chunk_size,
-			    "Set the size of the chunks used while reading"
-			    " log_buf",
-			    "Show the size of the chunks used while reading"
-			    " log_buf",
-			    NULL, NULL, NULL,
-			    &set_linux_awareness_cmd_list,
-			    &show_linux_awareness_cmd_list);
 #endif
 
   add_setshow_integer_cmd ("skip_schedule_frame",

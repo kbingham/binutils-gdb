@@ -343,8 +343,6 @@ struct linux_awareness_ops
      the task state is stored on context switch is target specific. */
   int (*lo_store_context_register) (int regno, CORE_ADDR task_struct);
 
-
-  int thread_size;
   int kernel_offset;
 };
 

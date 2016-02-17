@@ -688,7 +688,6 @@ struct linux_awareness_ops arm_linux_awareness_ops = {
     arch_return_address_at_start_of_function,
   .lo_fetch_context_register = arch_fetch_context_register,
   .lo_store_context_register = arch_store_context_register,
-  .thread_size = THREAD_SIZE,
   .kernel_offset = 0x0,
 };
 
