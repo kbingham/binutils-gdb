@@ -1768,7 +1768,7 @@ linux_aware_resume (struct target_ops *ops,
   lkd_stepping = step;
 
   /* Call platform dependant resume callback if needed. */
-  if (linux_awareness_ops->lo_pre_exec_start)
+  if (linux_awareness_ops && linux_awareness_ops->lo_pre_exec_start)
     {
       thread_awareness_inhibit ();
       cleanup = make_cleanup (thread_awareness_exhibit, NULL);
@@ -3725,6 +3725,15 @@ linux_awareness_check (void)
   if (!linux_awareness_lookup_symbol ("schedule")
       || !linux_awareness_lookup_symbol ("linux_banner"))
     return 0;			/* KO */
+
+  /* Make sure we have an architecture layer */
+  if (!linux_awareness_ops)
+  {
+	  /* More verbose here, as we believe we are looking at a kernel,
+	   * and the --enable-linux-awareness configure flag has been set */
+	  warning ("Architecture Layer Missing. Can't enable linux awareness");
+	  return 0;
+  }
 
   lkd_private.kflags |= KFLAG_LINUX;
 
