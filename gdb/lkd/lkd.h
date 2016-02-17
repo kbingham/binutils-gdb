@@ -139,45 +139,6 @@ extern unsigned bp_location_count;
 /* target stack ordering */
 #define LKD_STRATUM_LINUX (thread_stratum + 10)
 
-/**
- * LKD remote targets IDs
- */
-typedef enum
-{
-  lkd_local_stgdi = 0,
-  lkd_local_shtdi = 1,
-  lkd_remote_qemu = 2,
-			/**< qemu for LKD */
-  lkd_invalid = 0xff,
-			/**< no target */
-} lkd_proxy_id_t;
-
-/* little macros to shorten access to the tproxy  */
-#define PROXY       (linux_awareness_ops->proxy)
-#define PROXY_EXEC(x)  PROXY->exec(PROXY->x)
-
-/**
- * LKD remote targets proxy
- */
-typedef struct
-{
-  lkd_proxy_id_t id;
-			/**< id of the known target */
-  char *name;		/**< shortname */
-  char *(*exec) (char *);
-  char *version;	       /**< discovery/version command */
-  char *rd_cp15_SCR0;	     /**< System control Register 0 */
-  char *rd_cp15_TTBR0;	     /**< TT base register 0 */
-  char *wr_cp15_TTBR0;	    /**< set TTBR0 */
-  char *rd_cp15_ASID;	    /**< read context ID */
-  char *wr_cp15_ASID;	    /**< set context ID*/
-} lkd_proxy_t;
-
-lkd_proxy_id_t
-lkd_proxy_init_target (struct target_ops * beneath);
-
-void
-lkd_proxy_exit_target (void);
 
 typedef enum
 {
@@ -207,10 +168,6 @@ struct linux_awareness_params
    * as this can slow down the bootup of the system.
    **/
   int enable_module_load;	/*off by default */
-
-  /* For debugging. One can disable the virtual memory handling by
-     issuing 'set linux-awareness enable_vm_translation 0' */
-  int enable_vm_translation;
 
   /* For debugging. One can disable the task handling
      issuing 'set linux-awareness enable_task_awareness 0' */
@@ -297,12 +254,6 @@ struct mmu_infos
 extern struct mmu_infos mmu_info[];
 
 /* Mimic kernel macros */
-#define for_each_present_cpu(cpu) for (cpu = 0; cpu < max_cores; cpu++ )
-#define get_page(addr) ((addr) & ~((1<<linux_awareness_ops->page_shift)-1))
-#define virt_to_phys(x)    (((x) - linux_awareness_ops->page_offset) + linux_awareness_ops->phys_offset)
-#define phys_to_virt(x)    (((x) - linux_awareness_ops->phys_offset) + linux_awareness_ops->page_offset)
-#define global_page_state(item)	read_memory_unsigned_integer (ADDR (vm_stat)\
-						  + 4 * item,  4, LKD_BYTE_ORDER)
 #define container_of(ptr, struc, field)  ((ptr) - F_OFFSET(struc, field))
 
 extern int max_cores;
@@ -338,23 +289,6 @@ struct linux_awareness_ops
   /* Called before the processor is resumed. Can be NULL. */
   void (*lo_pre_exec_start) ();
 
-  /* Checks if the passed address needs some special handling before
-     accessing it. */
-  int (*lo_address_needs_translation) (CORE_ADDR addr);
-  /* Called to before accessing addr in the context of the task
-     pointed by task_struct. This function might modify addr, eg. to
-     make it point to the corresponding physical address. Returns
-     the status of the translation that corresponds to the status of
-     the virtual page where the address lies. */
-  enum page_status (*lo_translate_memory_address) (CORE_ADDR * addr,
-      struct process_t_ *ps);
-  /* Returns the memory location to watch in order to be notified
-     when the page containing addr in the context of task_struct is
-     mapped to memory. This normaly returns the address of the PTE
-     describing the corresponding page. Returns 0 if there's no such
-     address. */
-    CORE_ADDR (*lo_translate_memory_watch_address) (CORE_ADDR addr,
-        struct process_t_ *ps);
   /* Returns wether the page containing addr in the context of task_struct
      is mapped as writable. */
   int (*lo_can_write) (CORE_ADDR addr, CORE_ADDR task_struct);
@@ -419,18 +353,9 @@ struct linux_awareness_ops
      the task state is stored on context switch is target specific. */
   int (*lo_store_context_register) (int regno, CORE_ADDR task_struct);
 
-  int (*lo_switch_mmu) (CORE_ADDR task_struct);
-  void (*lo_save_mmu_info) (int core);
 
-  /* Usually 12 for 4K pages */
-  int page_shift;
   int thread_size;
   int kernel_offset;
-
-  int page_offset;
-  int phys_offset;
-
-  lkd_proxy_t *proxy;
 };
 
 extern struct target_ops linux_aware_ops;
@@ -564,7 +489,6 @@ extern struct debug_domain linux_aware_debug_domains_info[];
 
 enum linux_aware_debug_domain
 {
-  VM,
   TASK,
   MODULE,
   TARGET,
@@ -639,7 +563,6 @@ void linux_aware_read_symtab (struct partial_symtab *pst,
 
 int linux_aware_translate_address_safe (CORE_ADDR * addr, int silent);
 
-lkd_proxy_id_t lkd_proxy_get_current (void);
 
 int linux_aware_target_core (void);
 

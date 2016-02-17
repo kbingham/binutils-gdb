@@ -160,308 +160,6 @@ static const struct frame_unwind kmain_frame_unwind = {
   .prev_arch = NULL
 };
 
-/************************** Forward declarations **************************/
-static void pgtable_command (char *args, int from_tty);
-
-/*****************************************************************************/
-/*                         VIRTUAL ADDRESS TRANSLATION                       */
-/*****************************************************************************/
-
-/* TTBR<n> control bits mask */
-#define TTBRn_CONTROL_BITS_MASK 0x7F
-
-/* some (reasonable) kernel configuration assumptions */
-#define PAGE_OFFSET	0xc0000000
-#define PAGE_SHIFT	12
-#define THREAD_SIZE	(8*1024)
-
-/* h/w Level 1 descriptor (PMD)
-*/
-#define PMD_TYPE_TABLE		(1 << 0)
-#define PMD_FLAGS_MASK		(0x3ff)
-
-/* h/w Level 2 descriptor (PTE)
-*/
-#define PTE_TYPE_SMALL		(2 << 0)
-#define PTE_TYPE_LARGE		(1 << 0)
-#define PTE_TYPE_PAGE		(PTE_TYPE_SMALL|PTE_TYPE_LARGE)
-#define PTE_SFLGS_MASK		(0x0FFF)
-
-/* linux Level 1 descriptor
-*/
-#define L_PTE_PRESENT	(1 << 0)
-#define L_PTE_YOUNG	(1 << 1)
-#define L_PTE_DEFAULT	(L_PTE_PRESENT|L_PTE_YOUNG)
-
-/*
- * PMD_SHIFT determines the size of the area a second-level page table can map
- * PGDIR_SHIFT determines what a third-level page table entry can map
- */
-#define PGDIR_SHIFT             21	// include/asm/pgtable.h
-#define pgd_index(addr)         ((addr) >> PGDIR_SHIFT)
-
-/* This flushing routine is called only for virtual memory adresses.
-   If we pass access_addr == phys_addr, it means that we want to
-   suppress the alias we may have introduced through our direct access
-   to this physical address.
-
-   Precondition :
-   [access_addr..access_addr+len[ lies on the same physical page. */
-
-static void
-arch_flush_cache_for_region (CORE_ADDR access_addr,
-			     CORE_ADDR phys_addr, int len, int write)
-{
-}
-
-static void
-arch_save_mmu_info (int core)
-{
-  char *reply;
-
-  /*already saved*/
-  if (mmu_info[core].dirty)
-    return;
-
-  reply = PROXY_EXEC (rd_cp15_ASID);
-  sscanf (reply, "%x", &(mmu_info[core].prev_asid));
-
-  reply = PROXY_EXEC (rd_cp15_TTBR0);
-  sscanf (reply, "%x", &(mmu_info[core].prev_phys_pgd));
-
-  DEBUG (VM, 2, "core %d: mmu SAVE phy_pgd 0x%08x, asid %u\n", core,
-	 mmu_info[core].prev_phys_pgd, mmu_info[core].prev_asid);
-
-  mmu_info[core].dirty = 1;
-}
-
-static void
-switch_mm (uint32_t virt_pgd, uint32_t asid)
-{
-  static char comm[256];
-  int core = linux_aware_target_core ();
-  uint32_t phy_pgd = virt_to_phys (virt_pgd);
-
-  /* target core may change if current thread a core thread */
-  if (ptid_get_tid (inferior_ptid) != CORE_INVAL)
-    core = ptid_get_tid (inferior_ptid) - 1;
-
-  /* already switched */
-  if (mmu_info[core].curr_virt_pgd == virt_pgd)
-    return;
-
-  arch_save_mmu_info (core);
-
-  /* Inherit control bits from current TTBR0.  */
-  phy_pgd |= mmu_info[core].prev_phys_pgd & TTBRn_CONTROL_BITS_MASK;
-
-  sprintf (comm, PROXY->wr_cp15_ASID, 0); /* reserved asid */
-  PROXY->exec (comm);
-
-  sprintf (comm, PROXY->wr_cp15_TTBR0, (uint32_t) (phy_pgd));
-  PROXY->exec (comm);
-
-  if (asid)
-    {
-      sprintf (comm, PROXY->wr_cp15_ASID, asid);
-      PROXY->exec (comm);
-    }
-
-  DEBUG (VM, 2, "core %d: mmu PROG phy_pgd 0x%08x, pgd 0x%08x, asid %u\n",
-         core, phy_pgd, virt_pgd, asid);
-
-  mmu_info[core].curr_virt_pgd = virt_pgd;
-}
-
-static void
-arch_restore_mmu_info (void)
-{
-  int core;
-  static char comm[256];
-
-  for (core = 0; core < max_cores; core++)
-    if (mmu_info[core].dirty)
-      {
-      if (ptid_get_tid (inferior_ptid) != (core - 1))
-	{
-	   DEBUG (VM, 2, "switching back to core %d to restore mmu settings\n",
-		  core);
-	   /* we need switch the remote back to the right core
-	    **/
-	   switch_to_thread (lkd_proc_get_running (core)->gdb_thread->ptid);
-	}
-
-	sprintf (comm, PROXY->wr_cp15_ASID, 0);
-	PROXY->exec (comm);
-
-	sprintf (comm, PROXY->wr_cp15_TTBR0,
-		 (uint32_t) (mmu_info[core].prev_phys_pgd));
-	PROXY->exec (comm);
-
-	sprintf (comm, PROXY->wr_cp15_ASID, mmu_info[core].prev_asid);
-	PROXY->exec (comm);
-
-	DEBUG (VM, 2,
-	    "restore mmu settings for core %d: mmu PROG (phy_pgd=0x%08x, asid=%u)\n",
-	    core, mmu_info[core].prev_phys_pgd, mmu_info[core].prev_asid);
-
-	mmu_info[core].curr_virt_pgd = phys_to_virt (mmu_info[core].prev_phys_pgd);
-	mmu_info[core].dirty = 0;
-      }
-}
-
-
-/* FIXME: Highmem support will not work well currently, maybe this is
- * fixed next year with the changes for ARMv8. */
-static int
-arch_address_needs_translation (CORE_ADDR addr)
-{
-	/* QEMU: let's skip the
-	 * translation code except for kernel modules. */
-	if (lkd_proxy_get_current() == lkd_remote_qemu)
-	return ((addr >= linux_awareness_ops->kernel_offset)
-		&& (addr < linux_awareness_ops->page_offset));
-
-	return ((unsigned long) (addr) < linux_awareness_ops->page_offset);
-}
-
-    /*  MVA to PA for the Hardware:
-     *
-     *  TTBR0=        [translation base ][XXX 14 XXX] = swapper_pg_dir or task.mm.pgd
-     *  ADDR=                   |          [ index1 ][index2][page offset]
-     *                          |               /         /
-     *          PGD=    [translation base ][ index1 ]00         PA of first level descriptor
-     *           PMD=   [ page table base ][  flags  ]01        value of first level desc. (PMD)
-     *                          |                      /
-     *          &PTE=   [ page table base ][  index2  ]00       PA of the PTE.
-     *          PTE=    [base page address][ AC flags ]1x       value of the PTE.
-     *                                         |
-     *          PA=     [base page address][page offset]
-     *
-     *  MVA to PA for Linux, when no PAE and on 32 bits systems:
-     *  512*32 bit entries go into in a 4k page twice : once in ARM/mmu version one in Linux version.
-     *  now PDG_index starts at bit 21, where index1 started at bit 20.
-     *
-     *  ADDR=   [ PGD_index ][ PTE_index ][page offset]
-     *
-     *  PGD=    [pgd base ][PGD_index]000  PA of first level descriptor
-     *                              |
-     *                              l--> PTE_page from 0x000 to 0x400 : 256 hw PTE (index2's)
-     *  PGD + 0x4 ---------------------> PTE_page from 0x400 to 0x800 : 256 hw PTE (next index2's)
-     *  Linux versions of the PTE -----> PTE_page from 0x800 to 0xFFF : 512 Linux PTE
-     *
-     **/
-static void dump_translation (uint32_t ttbr0, uint32_t vma);
-
-static enum page_status
-arch_translate_memory_address (CORE_ADDR * addr, process_t *ps)
-{
-  uint32_t pgd = -1;
-  uint32_t asid = 0; /* reserved asid */
-
-  if (*addr >= linux_awareness_ops->kernel_offset)
-      pgd = ADDR (swapper_pg_dir);
-  else
-    {
-      CORE_ADDR mm = lkd_proc_get_mm (ps);
-
-      pgd = lkd_proc_get_pgd (ps);
-      if (mm)
-	asid = read_unsigned_embedded_field (mm,
-					     mm_struct, context,
-					     mm_context_t, id);
-    }
-
-  switch_mm (pgd, asid);
-
-  /* addr is unchanged in case or ARM. because the VMA is used
-     by the `beneath` target. */
-  return PAGE_PRESENT;
-}
-
-/* VMA translation debug/checker helper.
-*/
-void
-dump_translation (uint32_t ttbr0, uint32_t vma)
-{
-  uint32_t pa_1st;
-  uint32_t pa_2nd;
-  uint32_t val_1st;
-  uint32_t val_2nd;
-  uint32_t pa_addr;
-  uint32_t va_pa;
-  uint32_t value;
-  enum target_xfer_status status;
-  ULONGEST len;
-
-  printf_filtered ("ttbr0 = %08x\n", ttbr0);
-  printf_filtered ("vma = %08x\n", vma);
-
-  pa_1st = phys_to_virt (ttbr0 & 0xFFFFC000)
-	   + (((vma & 0xFFF00000) >> 20) << 2);
-
-  printf_filtered ("address of 1ST level descriptor= %08x\n", pa_1st);
-
-
-
-  // read_memory(pa_1st, ((gdb_byte *) & val_1st), 4);
-  status = BENEATH->to_xfer_partial (BENEATH,
-				  TARGET_OBJECT_MEMORY, NULL,
-				  ((gdb_byte *) & val_1st), NULL,
-				  (pa_1st), 4, &len);
-
-  printf_filtered ("value   of 1ST level descriptor= %08x\n", val_1st);
-
-  switch (val_1st & 0x3)
-    {
-    case 0:
-      printf_filtered ("FAULT\n");
-      return;
-      break;
-    case 1:
-      printf_filtered ("PAGE_TABLE\n");
-      pa_2nd = phys_to_virt (val_1st & 0xFFFFFC00)
-	       + (((vma & 0x000FF000) >> 12) << 2);
-      printf_filtered ("address of 2ND level descriptor= %08x\n", pa_2nd);
-
-      // read_memory(pa_2nd, ((gdb_byte *) & val_2nd), 4);
-      status = BENEATH->to_xfer_partial (BENEATH,
-				      TARGET_OBJECT_MEMORY, NULL,
-				      ((gdb_byte *) & val_2nd), NULL,
-				      (pa_2nd), 4, &len);
-
-      printf_filtered ("value   of 2ND level descriptor= %08x\n", val_2nd);
-
-      pa_addr = ((val_2nd & 0xFFFFF000) + (vma & 0xFFF));
-      va_pa = phys_to_virt (pa_addr);
-
-      printf_filtered ("PA decoded = %08x\n", pa_addr);
-
-      // read_memory(va_pa, ((gdb_byte *) & value), 4);
-      status = BENEATH->to_xfer_partial (BENEATH,
-				      TARGET_OBJECT_MEMORY, NULL,
-				      ((gdb_byte *) & value), NULL,
-				      (va_pa), 4, &len);
-
-      printf_filtered ("=> value = %08x\n", value);
-
-      break;
-    case 2:
-      printf_filtered ("SECTION or SUPERSECTION\n");
-      break;
-    case 3:
-      printf_filtered ("RESERVED\n");
-      break;
-    default:
-      gdb_assert ("Not reached" && 0);
-    }
-}
-
-static CORE_ADDR
-arch_translate_memory_watch_address (CORE_ADDR addr, process_t *ps)
-{
-  return 0;
-}
 
 static int
 arch_can_write (CORE_ADDR addr, CORE_ADDR task_struct)
@@ -884,9 +582,6 @@ arch_store_context_register (int regno, CORE_ADDR task_struct)
 static void
 arch_clear_cache (void)
 {
-  /* if post_stop context was different, switch back.
-   **/
-  arch_restore_mmu_info ();
 }
 
 /*****************************************************************************/
@@ -939,26 +634,6 @@ arch_close (void)
   arch_clear_cache ();
 }
 
-/* returns 1 if MMU is enabled */
-static int
-arch_check_mem_rdy(void)
-{
-#define ARMv7_BIT_MMUE (1<<0)
-	  int val;
-	  char *scr;
-
-	  /* Make sure we are testing on core0, as smp linux
-	   * may be init'ing core0, while coreN is on hold. */
-	  warning(_("Not switching threads, because STMC/SHTDI and QEmu have different concepts of TID/LWP usage\n"));
-	  //switch_to_thread (ptid_build (ptid_get_pid (inferior_ptid),0,1));
-
-	  scr = PROXY_EXEC (rd_cp15_SCR0);
-	  sscanf (scr, "%x", &val);
-
-	  return ((val & ARMv7_BIT_MMUE) != 0);
-
-#undef ARMv7_BIT_MMUE
-}
 
 /*
  * default op handler for STGDI (non-remote)
@@ -967,47 +642,9 @@ static void
 arch_post_load (char *prog, int fromtty)
 {
   CORE_ADDR addr_phys_offset;
-  char *ttbr0_str;
 
   DEBUG (D_INIT, 1, "ARM: arch_post_load\n");
 
-  ttbr0_str = PROXY_EXEC (rd_cp15_TTBR0);
-
-  printf_unfiltered ("\nLoaded ARMv7 LKD support.\n");
-  DEBUG (TARGET, 1, "scr0: %s\n", PROXY_EXEC (rd_cp15_SCR0));
-  DEBUG (TARGET, 1, "ttr0: %s\n", ttbr0_str);
-  DEBUG (TARGET, 1, "asid: %s\n", PROXY_EXEC (rd_cp15_ASID));
-
-#define KMEM_GUESS_MASK 0xC0000000
-
-  /* store the physical offset of the first memory bank.
-   **/
-  if (!HAS_ADDR (meminfo))
-    {
-      sscanf (ttbr0_str, "%x", &(linux_awareness_ops->phys_offset));
-      linux_awareness_ops->phys_offset &= 0xC0000000;
-      warning ("Will use 0x%08x as PHYS_OFFSET without guaranty.",
-	       linux_awareness_ops->phys_offset);
-    }
-  else
-    {
-      linux_awareness_ops->phys_offset =
-	read_unsigned_embedded_field (ADDR (meminfo), meminfo, bank, membank,
-				      start);
-
-      DEBUG (TARGET, 1, "Got 0x%08x as PHYS_OFFSET offset for bank 0.\n",
-	     linux_awareness_ops->phys_offset);
-    }
-
-  linux_awareness_ops->page_offset = ADDR (start_kernel) & KMEM_GUESS_MASK;
-
-  DEBUG (TARGET, 1, "Assuming 0x%08x as PAGE_OFFSET.\n",
-	 linux_awareness_ops->page_offset);
-
-#undef KMEM_GUESS_MASK
-
-  linux_awareness_ops->kernel_offset =
-    linux_awareness_ops->page_offset - MODULES_VADDR_D;
 
   DEBUG (TARGET, 1, "Assuming 0x%08x as MODULES_VADDR.\n",
 	 linux_awareness_ops->kernel_offset);
@@ -1026,8 +663,6 @@ arch_init (void)
 {
   DEBUG (D_INIT, 1, "ARM: arch_init.\n");
 
-  add_com ("pgtable", class_stm, pgtable_command,
-	   "Print page table status for given address.");
   return 1;
 }
 
@@ -1049,14 +684,9 @@ struct linux_awareness_ops arm_linux_awareness_ops = {
   .lo_init = arch_init,
   .lo_close = arch_close,
   .lo_post_load = arch_post_load,
-  .lo_check_mem_rdy = arch_check_mem_rdy,
-  .lo_address_needs_translation = arch_address_needs_translation,
-  .lo_translate_memory_address = arch_translate_memory_address,
-  .lo_translate_memory_watch_address = arch_translate_memory_watch_address,
   .lo_can_write = arch_can_write,
   .lo_is_user_address = arch_is_user_address,
   .lo_is_kernel_address = arch_is_kernel_address,
-  .lo_flush_cache = arch_flush_cache_for_region,
   .lo_single_step_destination = NULL,
   .lo_clear_cache = arch_clear_cache,
   .lo_first_pointer_arg_value = arch_first_pointer_arg_value,
@@ -1066,59 +696,12 @@ struct linux_awareness_ops arm_linux_awareness_ops = {
     arch_return_address_at_start_of_function,
   .lo_fetch_context_register = arch_fetch_context_register,
   .lo_store_context_register = arch_store_context_register,
-  .lo_save_mmu_info = arch_save_mmu_info,
-  .page_shift = PAGE_SHIFT,
   .thread_size = THREAD_SIZE,
   .kernel_offset = 0x0,
-  .page_offset = 0x0,
-  .phys_offset = 0x0,		/*Target specific */
-  .proxy = NULL
 };
 
 extern process_t *running_process[];
 
-static void
-pgtable_command (char *args, int from_tty)
-{
-  CORE_ADDR addr;
-  unsigned int tbl, pgdval, pte, pteval, i;
-  int core = linux_aware_target_core ();
-
-  /* target core may change if current thread a core thread */
-  if (ptid_get_tid (inferior_ptid) != CORE_INVAL)
-    core = ptid_get_tid (inferior_ptid) - 1;
-
-  /* This command uses the CURRENT PGD setting, according to the
-   * current selected thread
-   **/
-  printf_filtered ("TTBRO: %s\n", PROXY_EXEC (rd_cp15_TTBR0));
-  printf_filtered ("ASID: %s\n", PROXY_EXEC (rd_cp15_ASID));
-
-  printf_filtered ("mmu_info[0].PGD:\t%08x\n", mmu_info[0].curr_virt_pgd);
-  printf_filtered ("mmu_info[1].PGD:\t%08x\n", mmu_info[1].curr_virt_pgd);
-
-  printf_filtered ("inferior_ptid = %d-%ld-%ld\n",
-		   ptid_get_pid (inferior_ptid),
-		   ptid_get_lwp (inferior_ptid),
-		   ptid_get_tid (inferior_ptid));
-
-  printf_filtered ("phys_offset = %08x\n", linux_awareness_ops->phys_offset);
-  printf_filtered ("page_offset = %08x\n", linux_awareness_ops->page_offset);
-
-  if (!args && from_tty)
-    {
-      lkd_dump_rq_info ();
-      return;
-    }
-
-  addr = parse_and_eval_address (args);
-  printf_filtered ("Addr:\t%lx\n", addr);
-
-  printf_filtered ("translation through core = %d\n", core);
-  dump_translation (virt_to_phys (mmu_info[core].curr_virt_pgd), addr);
-
-  linux_aware_translate_address_safe (&addr, 0);
-}
 
 /* -Wmissing-prototypes */
 extern initialize_file_ftype _initialize_armv7_lkd;

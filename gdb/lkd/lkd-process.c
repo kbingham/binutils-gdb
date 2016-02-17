@@ -1122,7 +1122,6 @@ lkd_proc_set_symfile (void)
 {
   process_t *ps;
 
-  page_error_clear ();
 
   ps = lkd_proc_get_by_ptid (inferior_ptid);
   if (ps && ps->main_objfile)
