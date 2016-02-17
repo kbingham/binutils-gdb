@@ -722,7 +722,8 @@ ALL_TARGET_OBS = \
 	windows-tdep.o \
 	linux-record.o \
 	ravenscar-thread.o \
-	lkd-main.o lkd-process.o
+	lkd-main.o lkd-process.o \
+	lkd-arm.o
 
 # Host-dependent makefile fragment comes in here.
 @host_makefile_frag@
@@ -2726,6 +2727,10 @@ lkd-main.o: $(srcdir)/lkd/lkd-main.c
 
 lkd-process.o: $(srcdir)/lkd/lkd-process.c
 	$(COMPILE) $(srcdir)/lkd/lkd-process.c
+	$(POSTCOMPILE)
+
+lkd-arm.o: $(srcdir)/lkd/lkd-arm.c
+	$(COMPILE) $(srcdir)/lkd/lkd-arm.c
 	$(POSTCOMPILE)
 
 #
