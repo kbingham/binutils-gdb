@@ -122,7 +122,6 @@ struct debug_domain linux_aware_debug_domains_info[] = {
   {"debug-module", 0},
   {"debug-target", 0},
   {"debug-init", 0},
-  {"debug-user", 0},
   {"debug-frame", 0},
   {"debug-bp", 0},
   {NULL, 0}
@@ -136,7 +135,6 @@ struct linux_awareness_params lkd_params = {
   .enable_module_load = 0,
   .enable_task_awareness = 1,
   .auto_activate = 1,
-  .auto_debug_process = 1,
   .skip_schedule_frame = 0, /*RnDCT0001394: changed default behavior*/
   .no_colors = 0,
   .loglevel = 0
@@ -492,8 +490,6 @@ static void (*deprecated_delete_breakpoint_chain) (struct breakpoint * bpt);
 static void (*deprecated_context_chain) (int id);
 
 static void normal_stop_callback (struct bpstats *bs, int);
-
-static void check_exec_actions (void);
 
 /***************** End Local functions forward declarations *******************/
 
@@ -1190,36 +1186,6 @@ linux_aware_wait (struct target_ops *ops,
        **/
       target_root_prefix_dirty = 1;	// fixme: code a proper command handler.
 
-      /* automatically pull symbols, but for that user-mode thread that
-       * was responsible for the event only, if any.
-       **/
-      lkd_proc_read_symbols ();
-
-      /* Do the symbol tables modification to reflect the
-         namespace of the current process. */
-      lkd_proc_set_symfile ();
-
-      if (IS_LOC (pc, thread_event_low_mem_bp))
-	{
-	  disable_userspace_breakpoints ();
-	}
-      else if (IS_LOC (pc, thread_event_do_exec_bp))
-	{
-	  CORE_ADDR a =
-	    linux_awareness_ops->lo_return_address_at_start_of_function ();
-	  thread_event_do_exec_return_bp =
-	    create_thread_event_breakpoint (target_gdbarch (), a);
-	}
-      else if (IS_LOC (pc, thread_event_do_exec_return_bp))
-	{
-	  /* Call potential actions set by the user with the
-	     wait_exe command. */
-	  check_exec_actions ();
-	}
-      else if (IS_LOC (pc, thread_event_do_exit_bp) && wait_process)
-	{
-	  lkd_proc_remove_bpts (wait_process);
-	}
       /* wait_process is non-null once we've successfully loaded lkd,
        * and we could compute the current process for that core.
        **/
@@ -1551,117 +1517,6 @@ init_linux_aware_target (void)
   linux_aware_ops.to_is_async_p = linux_aware_is_async_p;
 }
 
-/******************************************************************************/
-/**************                USERSPACE DEBUG                   **************/
-/******************************************************************************/
-
-/* Helper for make_cleanup. */
-static void
-restore_confirm (void *saved_confirm)
-{
-  confirm = (long) saved_confirm;
-}
-
-/* Helper for make_cleanup. */
-static void
-restore_inferior_ptid (void *saved_ptid)
-{
-  inferior_ptid = *(ptid_t *) saved_ptid;
-}
-
-/* This function is called when a process just called exec() to see if
- the user has requested a specific action to be taken when the new
- executable starts. */
-static void
-check_exec_actions (void)
-{
-  char *execed;
-  process_t *ps;
-  struct waited_exe *exe = waited_exes, *prev = NULL;
-  struct command_line *cmd;
-  uid_t uid;
-  CORE_ADDR mm;
-  int found = 0;
-
-  ps = wait_process;
-  mm = lkd_proc_get_mm (ps);
-
-  if (!ps || !mm)
-    return;
-
-  /* Get the exectuable name for the new image. */
-  execed = lkd_proc_get_exe (mm);
-  if (execed == NULL)
-    return;
-
-  uid = lkd_proc_get_uid (ps->task_struct);
-
-  DEBUG (USER, 2, "%s: The executable is : %s\n", __FUNCTION__, execed);
-
-  disable_terminate ();
-
-  /* Iterate the waited executables. */
-  while (exe && !found)
-    {
-      struct cleanup *cleanup;
-      ptid_t saved_ptid = inferior_ptid;
-
-      if (exe->name)
-	{
-	  /* Look if the new executable ends with the requested name. */
-	  DEBUG (USER, 3, "\tComparing to '%s'\n", exe->name);
-
-	  if ((strstr (execed, exe->name) ==
-	       (execed + strlen (execed) - strlen (exe->name))))
-	    found = 1;		/*found */
-	}
-
-      DEBUG (USER, 3, "\tComparing exe->uid= %d to %d\n", exe->uid, uid);
-      if ((uid == exe->uid) || ((exe->uid == -2) && (uid >= AID_APP)))
-	found = 1;		/*found */
-
-      if (found)
-	{
-	  /* Set confirm to 0 so that the interactive questions get
-	     automatically answered with their default answer. */
-	  cleanup = make_cleanup (restore_confirm, (void *) (long) confirm);
-	  make_cleanup (restore_inferior_ptid, &saved_ptid);
-	  confirm = 0;
-	  inferior_ptid = PTID_OF (wait_process);
-
-	  /* Load the debug info for the process. */
-	  debug_process_command (NULL, 0);
-	  cmd = exe->cmds;
-	  /* execute the user entered commands. */
-	  while (cmd != NULL)
-	    {
-	      execute_control_command (cmd);
-	      cmd = cmd->next;
-	    }
-	  do_cleanups (cleanup);
-
-	  /* Remove the waited_exe from the list. */
-	  if (prev != NULL)
-	    prev->next = exe->next;
-	  else
-	    waited_exes = exe->next;
-
-	  xfree (exe->name);
-	  free_command_lines ((struct command_line **) &(exe->cmds));
-	  xfree (exe);
-	}
-      else
-	{
-	  prev = exe;
-	  exe = exe->next;
-	}
-    }
-
-  enable_terminate ();
-
-  return;
-}
-
 #ifdef HAS_PAGE_MONITORING
 
 /* This function create the commands that will be executed when the
@@ -1924,193 +1779,6 @@ wait_page_command (char *args, int from_tty)
 }
 #endif
 
-/* Implements the wait_exe command. See the  'struct waited_exe'
- comment. */
-static void
-set_wait_exe (char *comm, uid_t uid, int from_tty)
-{
-  struct command_line *cmds;
-  struct waited_exe *prev, *res = waited_exes;
-  struct waited_exe **new;
-
-  int display = 0, erase = 0;
-
-  if (comm == NULL)
-    {
-      if (uid == -1)
-	display = 1;
-    }
-  else if (comm[0] == '-')
-    erase = 1;
-
-  new = &waited_exes;
-  prev = res;
-
-  while (res)
-    {
-      if (display)
-	{
-	  if (res->uid == -1)
-	    /*seeking for a given name */
-	    printf_filtered
-	      ("waiting for %s: will do \"%s\"...\n",
-	       res->name, res->cmds->line);
-	  else if (res->uid == -2)
-	    /*seeking for any ANDROID vm */
-	    printf_filtered
-	      ("waiting for any Android app_xx: will do \"%s\"...\n",
-	       res->cmds->line);
-	  else
-	    /*seeking for a given uid */
-	    printf_filtered
-	      ("waiting for UID %d: will do \"%s\"...\n",
-	       res->uid, res->cmds->line);
-	}
-      prev = res;
-      res = res->next;
-      if (erase)
-	xfree (prev);
-    }
-
-  if (erase)
-    {
-      waited_exes = NULL;
-      if (thread_event_do_exec_bp)
-	delete_breakpoint (thread_event_do_exec_bp);
-      if (thread_event_do_exec_return_bp)
-	delete_breakpoint (thread_event_do_exec_return_bp);
-      thread_event_do_exec_bp = NULL;
-      thread_event_do_exec_return_bp = NULL;
-      printf_filtered ("cleared wait list.\n");
-      return;
-    }
-
-  if (display)
-    return;
-
-  if (prev)
-    new = &(prev->next);
-
-  *new = xcalloc (1, sizeof (struct waited_exe));
-
-  (*new)->uid = uid;
-
-  if (uid == -1)
-    (*new)->name = xstrdup (comm);
-
-  cmds =
-    read_command_lines
-    ("Type commands that will be executed the next time the binary is executed.\n"
-     "Setting breakpoints is OK, but do not continue or step before the breakpoint is hit.",
-     from_tty, 1, NULL, NULL);
-
-  (*new)->cmds = cmds;
-
-  if (thread_event_do_exec_return_bp == NULL)
-    thread_event_do_exec_bp
-      = create_thread_event_breakpoint (target_gdbarch (),
-					ADDR (search_binary_handler));
-}
-
-static void
-wait_exe_command (char *args, int from_tty)
-{
-  if ((args == NULL) && (waited_exes == NULL))
-    {
-      printf_filtered ("You must supply an executable name.\n");
-      return;
-    }
-
-  set_wait_exe (args, -1, from_tty);
-};
-
-static void
-wait_exe_uid_command (char *args, int from_tty)
-{
-  uid_t uid = -1;
-
-  if (args == NULL)
-    {
-      if (waited_exes == NULL)
-	{
-	  printf_filtered ("You must supply a UID.\n");
-	  return;
-	}
-    }
-  else if (args[0] == '-')
-    /*clear */
-    return set_wait_exe (args, -1, from_tty);
-  else
-    /*non-null argument */
-    uid = strtoul (args, NULL, 0);
-
-  set_wait_exe (NULL, uid, from_tty);
-};
-
-#ifdef HAS_ANDROID_SUPPORT
-static void
-wait_android_vm_command (char *args, int from_tty)
-{
-  uid_t uid = -1;
-
-  if (args == NULL)
-    {
-      if (waited_exes == NULL)
-	{
-	  printf_filtered
-	    ("You must supply a number (for app_#) or the * token (for app_*).\n");
-	  return;
-	}
-    }
-  else if (args[0] == '*')
-    /* app_* */
-    uid = -2;
-  else if (args[0] != '-')
-    {
-      /* app_? */
-      uid = AID_APP + strtoul (args, NULL, 0);
-    }
-  else				/* clear list */
-    return set_wait_exe (args, -1, from_tty);
-
-  set_wait_exe (NULL, uid, from_tty);
-};
-#endif
-
-/* This function replaces dwarf2_psymtab_to_symtab in the userspace
- processes psymtabs. This version calls dwarf2_psymtab_to_symtab but
- it rewrites paths to take target_root_prefix into account. */
-void
-linux_aware_read_symtab (struct partial_symtab *pst, struct objfile *objfile)
-{
-  struct stat stat_struct;
-
-  if (!dwarf2_psymtab_to_symtab)
-    return;
-
-  if (!pst)
-    return;
-
-  dwarf2_psymtab_to_symtab (pst, objfile);
-
-  if (pst->dirname && stat (pst->dirname, &stat_struct) == -1)
-    {
-      char *host_dir = xstrprintf ("%s/%s",
-				   *target_root_prefix,
-				   pst->dirname);
-
-      if (stat (host_dir, &stat_struct) == 0)
-	{
-	  char * dirname = obstack_alloc (&objfile->objfile_obstack, strlen (host_dir) + 1);
-	  strcpy (dirname, host_dir);
-
-	  // Are we freeing the existing pointer?
-	  pst->dirname = dirname;
-	}
-
-      xfree (host_dir);
-    }
-}
 
 /* This function is here to replace the default display for
  breakpoints set on code that has been unloaded. This display
@@ -2886,19 +2554,6 @@ linux_awareness_init (void)
   add_com ("pmap", class_stm, pmap_command,
 	   "Print the memory map of the current process.");
 
-
-  add_com ("debug_process", class_stm, debug_process_command,
-	   "Allow to debug the current userspace process. "
-	   "This will load the required symbols.");
-
-  add_com ("wait_exe", class_stm, wait_exe_command,
-	   "Make the debugger execute a list of commands when a given "
-	   "executable is exec'd");
-
-  add_com ("wait-exe-uid", class_stm, wait_exe_uid_command,
-	   "Make the debugger execute a list of commands when a given "
-	   "executable is exec'd with a specific UID");
-
 #ifdef HAS_ANDROID_SUPPORT
   add_com ("wait-android-vm", class_lkd, wait_android_vm_command,
 	   "Make the debugger execute a list of commands when a given "
@@ -3312,17 +2967,6 @@ _initialize_linux_awareness (void)
 			   &lkd_params.auto_activate,
 			   "Set whether we try to autodetect linux kernels.",
 			   "Show whether we try to autodetect linux kernels.",
-			   NULL, NULL, NULL,
-			   &set_linux_awareness_cmd_list,
-			   &show_linux_awareness_cmd_list);
-
-  add_setshow_boolean_cmd ("auto_debug_process",
-			   class_stm,
-			   &lkd_params.auto_debug_process,
-			   "Set whether we try to automatically load "
-			   "information for userspace processes.",
-			   "Show whether we try to automatically load "
-			   "information for userspace processes.",
 			   NULL, NULL, NULL,
 			   &set_linux_awareness_cmd_list,
 			   &show_linux_awareness_cmd_list);

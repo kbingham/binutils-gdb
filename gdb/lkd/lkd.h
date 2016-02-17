@@ -179,11 +179,6 @@ struct linux_awareness_params
      file. */
   int auto_activate;
 
-  /* Normally debug symbols for usersapce tasks will be read
-     automatically when required. If this is not wanted or causes
-     issues, the user can 'set linux-awareness auto_debug_process 0'. */
-  int auto_debug_process;
-
   /* The current global loglevel as set by 'set linux-awareness
      debug-all' */
   int loglevel;
@@ -493,7 +488,6 @@ enum linux_aware_debug_domain
   MODULE,
   TARGET,
   D_INIT,
-  USER,
   FRAME,
   BP,
   KEEP_LAST

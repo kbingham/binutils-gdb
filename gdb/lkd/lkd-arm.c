@@ -306,7 +306,6 @@ exception_frame_sniffer (const struct frame_unwind *self,
       || (HAS_ADDR (ret_from_exception) && pc == ADDR (ret_from_exception))
       || (HAS_ADDR (__und_usr_unknown) && pc == ADDR (__und_usr_unknown)))
     {
-      lkd_proc_read_symbols ();
       return 1;
     }
 
@@ -399,13 +398,6 @@ syscall_frame_sniffer (const struct frame_unwind *self,
 		  || (HAS_ADDR (ret_slow_syscall)
 		      && func == ADDR (ret_slow_syscall)));
 
-  if ((frame_relative_level (next_frame) != -1)
-      && ((HAS_ADDR (work_resched) && func == ADDR (work_resched))
-	  || test_ret))
-    {
-      /* Do that here because.... it should work. :-/  */
-      lkd_proc_read_symbols ();
-    }
 
   if (test_ret)
     {
