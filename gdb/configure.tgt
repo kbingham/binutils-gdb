@@ -733,6 +733,8 @@ if test x"$enable_linux_kernel_aware" = xyes; then
   case "${targ}" in
   arm*-*-linux*)
 	  gdb_target_obs="$gdb_target_obs lkd-arm.o" ;;
+  aarch64*-*-linux*)
+	  gdb_target_obs="$gdb_target_obs lkd-aarch64.o" ;;
   esac
   gdb_osabi=
 fi
