@@ -731,6 +731,8 @@ done
 if test x"$enable_linux_kernel_aware" = xyes; then
   gdb_target_obs="$gdb_target_obs lkd-main.o lkd-process.o"
   case "${targ}" in
+  x86_64*-*-linux*)
+	  gdb_target_obs="$gdb_target_obs lkd-x86_64.o" ;;
   arm*-*-linux*)
 	  gdb_target_obs="$gdb_target_obs lkd-arm.o" ;;
   aarch64*-*-linux*)
