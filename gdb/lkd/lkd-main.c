@@ -3780,7 +3780,7 @@ lkd_enabled_set (char *args, int from_tty, struct cmd_list_element *c)
   DEBUG (D_INIT, 1, "lkd_enabled_set\n");
 
   /*if not from tty, we can use args as a parameter. */
-  if ((!from_tty) && ((int) args == 1))
+  if ((!from_tty) && ((uintptr_t)args == 1))
     lkd_params.enabled = 1;
 
   if (lkd_params.enabled == stored_state)

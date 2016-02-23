@@ -149,21 +149,25 @@ restore_breakpoint_locations_count (void *bps)
 
 
 static int
-find_thread_lwp (struct thread_info *tp, void *lwp)
+find_thread_lwp (struct thread_info *tp, void *arg)
 {
-  return (ptid_get_lwp(tp->ptid) == (int) lwp);
+  long lwp = *(long*)arg;
+
+  return (ptid_get_lwp(tp->ptid) == lwp);
 }
 
 static int
-find_thread_swapper (struct thread_info *tp, void *core)
+find_thread_swapper (struct thread_info *tp, void *arg)
 {
-  if ((!ptid_get_lwp(tp->ptid)) && (ptid_get_tid(tp->ptid) == (long) core))
+  long core = *(long*)arg;
+
+  if ((!ptid_get_lwp(tp->ptid)) && (ptid_get_tid(tp->ptid) == core))
     {
-      DEBUG (TASK, 2, "swapper found: tp->ptid(%d-%ld-%ld) core=%d\n",
+      DEBUG (TASK, 2, "swapper found: tp->ptid(%d-%ld-%ld) core=%ld\n",
 	     ptid_get_pid(tp->ptid),
 	     ptid_get_lwp(tp->ptid),
 	     ptid_get_tid(tp->ptid),
-	     (unsigned int) core);
+	     core);
       return 1;
     }
   return 0;
@@ -262,17 +266,20 @@ get_task_info (CORE_ADDR task_struct, process_t ** ps,
 
   if (core != CORE_INVAL)
     {
+      /* Long usage to map to LWP */
+      long core_mapped = core + 1;
+
       /* swapper[core] */
       gdb_assert (lwp==0);
 
-      this_ptid = ptid_build (ptid_get_pid(inferior_ptid), lwp /* == 0 */ , core + 1);
+      this_ptid = ptid_build (ptid_get_pid(inferior_ptid), lwp /* == 0 */ , core_mapped);
       l_ps->gdb_thread =
-	iterate_over_threads (find_thread_swapper, (void *) (core + 1));
+	iterate_over_threads (find_thread_swapper, &core_mapped);
     }
   else
     {
       this_ptid = ptid_build (ptid_get_pid(inferior_ptid), lwp, CORE_INVAL);
-      l_ps->gdb_thread = iterate_over_threads (find_thread_lwp, (void *) lwp);
+      l_ps->gdb_thread = iterate_over_threads (find_thread_lwp, &lwp);
 
       /*reset the thread core value, if existing */
       if (l_ps->gdb_thread)
@@ -733,7 +740,7 @@ lkd_proc_get_by_ptid (ptid_t ptid)
 
   if (lwp)
 	  /*non-swapper, ignore TID */
-	  tp = iterate_over_threads (find_thread_lwp, (void *) lwp);
+	  tp = iterate_over_threads (find_thread_lwp, &lwp);
   else
 	  /*swapper, TID gives the core, lwp = 0 is not unique */
 	  tp = find_thread_ptid(ptid);
