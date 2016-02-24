@@ -64,22 +64,8 @@ DECLARE_FIELD (rq, idle);
 DECLARE_FIELD (rq, lock);
 DECLARE_FIELD (raw_spinlock, magic);
 
-DECLARE_FIELD (dentry, d_parent);
-DECLARE_FIELD (dentry, d_name);
-DECLARE_FIELD (dentry, d_flags);
-DECLARE_FIELD (file, f_dentry);
-DECLARE_FIELD (file, f_path);
-
 DECLARE_FIELD (list_head, next);
 
-DECLARE_FIELD (mm_struct, mmap);
-DECLARE_FIELD (mm_struct, map_count);
-DECLARE_FIELD (mm_struct, arg_start);
-DECLARE_FIELD (mm_struct, arg_end);
-DECLARE_FIELD (mm_struct, env_start);
-DECLARE_FIELD (mm_struct, env_end);
-DECLARE_FIELD (mm_struct, pgd);
-DECLARE_FIELD (mm_struct, exe_file);
 
 DECLARE_FIELD (task_struct, active_mm);
 DECLARE_FIELD (mnt_namespace, list);
@@ -311,79 +297,6 @@ get_task_info (CORE_ADDR task_struct, process_t ** ps,
   l_ps->old_ptid = PTID_OF (l_ps);
 }
 
-static void
-print_env (CORE_ADDR mm)
-{
-  unsigned long env_start = read_unsigned_field (mm, mm_struct, env_start);
-  unsigned long env_end = read_unsigned_field (mm, mm_struct, env_end);
-  long len = env_end - env_start;
-  gdb_byte *buf = xmalloc (len + 1);
-  int l = 0, i = 0;
-
-  read_memory (env_start, buf, len);
-  buf[len] = '\0';
-
-  printf_filtered ("------ Environment ------\n");
-
-  while (len > l)
-    {
-      printf_filtered ("environ[%i] = '%s'\n", i++, buf + l);
-      l += strlen ((char *) buf + l) + 1;
-    }
-
-  xfree (buf);
-}
-
-static void
-print_cmdline (CORE_ADDR mm)
-{
-  unsigned long arg_start = read_unsigned_field (mm, mm_struct, arg_start);
-  unsigned long arg_end = read_unsigned_field (mm, mm_struct, arg_end);
-  unsigned long len = arg_end - arg_start;
-  gdb_byte *buf = xmalloc (len + 1);
-  unsigned int l = 0, i = 0;
-
-  read_memory (arg_start, buf, len);
-  buf[len] = '\0';
-
-  printf_filtered ("------ Command line ------\n");
-
-  while (len > l)
-    {
-      size_t sl = strlen ((char *) buf + l);
-      if (sl)
-	printf_filtered ("argv[%i] = '%s'\n", i, buf + l);
-
-      l += sl + 1;
-      i++;
-    }
-  xfree (buf);
-}
-
-static void
-print_uid (CORE_ADDR task)
-{
-  uid_t id = lkd_proc_get_uid (task);
-
-  printf_filtered ("uid: %d", id);
-
-  if (id >= AID_APP)
-    printf_filtered (" app_%d", id - AID_APP);
-  printf_filtered ("\n");
-}
-
-static void
-print_exe (CORE_ADDR mm)
-{
-  char *filename = lkd_proc_get_exe (mm);
-
-  if (filename != NULL)
-    printf_filtered ("exe: %s\n", filename);
-  else
-    printf_filtered ("exe: Not found\n");
-
-  xfree (filename);
-}
 
 /* Returns the 'process_t' corresponding to the passed task_struct or
  NULL if not in the list. */
@@ -560,45 +473,6 @@ get_list_helper (process_t ** ps)
 
 
 /*----------------------------------------------------------------------------------------------*/
-
-/* Android Awareness: retrieve the task's credentials to check for a given user ID
- **/
-uid_t
-lkd_proc_get_uid (CORE_ADDR task)
-{
-  CORE_ADDR cd;
-
-  /*the task struct is not likely to change much from one kernel version
-     to another. Knowing that comm is one on the far fields, try read the task struct
-     in one command */
-  cd = read_pointer_field(task, task_struct, cred);
-
-  /*assuming uid_t remains uint32_t.*/
-  return read_unsigned_field(cd, cred, fsuid);
-}
-
-CORE_ADDR
-lkd_proc_get_mm (process_t * ps)
-{
-  CORE_ADDR task = ps->task_struct;
-
-  /* only test ps->mm to know if this is a kernel context
-   * actually read from mem. */
-  return read_pointer_field (task, task_struct, mm);
-}
-
-CORE_ADDR
-lkd_proc_get_pgd (process_t * ps)
-{
-  CORE_ADDR mm = lkd_proc_get_mm(ps);
-
-  if (mm)
-    ps->pgd = read_unsigned_field (mm, mm_struct, pgd);
-  else
-    ps->pgd = ADDR (swapper_pg_dir);
-
-  return ps->pgd;
-}
 
 /* This function returns a the list of 'process_t' corresponding
  to the tasks in the kernel's task list. */
@@ -981,28 +855,6 @@ lkd_proc_refresh_info (int cur_core)
   return 1;
 }
 
-/* Returns the name of the main executable for the task using the
- passed mm_struct. It does so by walking the list of memory
- mappings for that mm and finding the one with the VM_EXECUTABLE
- flag. */
-char *
-lkd_proc_get_exe (CORE_ADDR mm)
-{
-  CORE_ADDR file;
-  unsigned int flags;
-
-  gdb_assert(mm);
-
-  /* RnDCT00013992 VM_EXECUTABLE no longer to be used.
-   * fine with 3.4 and 3.10 */
-  file = read_pointer_field (mm, mm_struct, exe_file);
-  if (file)
-		return read_dentry (read_pointer_embedded_field (file, file,
-								 f_path, path,
-								 dentry));
-  return NULL;
-}
-
 /* Setup the symbols to reflect the namespace of the passed
  process. GDB doesn't really support this. We hack this support by
  appending the list of objfiles containing the debug information
@@ -1040,65 +892,4 @@ running_task_command (char *args, int from_tty)
   gdb_thread_select (current_uiout, thread_id, NULL);
 
   xfree (thread_id);
-}
-
-void
-process_info_command (char *args, int from_tty)
-{
-  process_t *ps;
-  CORE_ADDR task;
-  CORE_ADDR mm;
-
-  if (lkd_private.loaded != LKD_LOADED)
-    {
-      printf_filtered (LA_NOT_LOADED_STRING);
-      return;
-    }
-
-  ps = lkd_proc_get_by_ptid (inferior_ptid);
-  gdb_assert(ps);
-
-  task = ps->task_struct;
-  mm = lkd_proc_get_mm(ps);
-
-  printf_filtered ("p.comm \"%s\"\n", ps->comm);
-  printf_filtered ("p.task_struct: 0x%x\n", (unsigned int) task);
-  printf_filtered ("\t.mm=\t%s\n", phex (mm, 4));
-  printf_filtered ("\t.mm.pgd=\t%x\n", (uint32_t) lkd_proc_get_pgd (ps));
-
-  mm = ps->active_mm;
-  printf_filtered ("\t.active_mm=\t%s\n", phex (mm, 4));
-  printf_filtered ("\t.active_mm.pgd=\t%s\n",
-		   phex (read_unsigned_field (mm, mm_struct, pgd), 4));
-
-  if (ps->prio > 99)
-    {
-      printf_filtered
-	("Comm: %s (pid %li, prio %i, nice %i, rtprio --)\n",
-	 ps->comm,
-	 ptid_get_lwp(PTID_OF (ps)),
-	 139 - (ps->prio),
-	 19 - (139 - (ps->prio)));
-    }
-  else
-    {
-      printf_filtered
-	("Comm: %s (pid %li, prio %i, nice --, rtprio %i)\n",
-	 ps->comm,
-	 ptid_get_lwp(PTID_OF (ps)),
-	 139 - (ps->prio),
-	 99 - (ps->prio));
-    }
-
-  mm = lkd_proc_get_mm(ps);
-  if (!mm)
-    {
-      printf_filtered ("\tKernel thread\n");
-      return;
-    }
-
-  print_uid (task);
-  print_exe (mm);
-  print_cmdline (mm);
-  print_env (mm);
 }
