@@ -576,49 +576,6 @@ arch_clear_cache (void)
 {
 }
 
-/*****************************************************************************/
-/*                      VARIOUS KERNEL AWARENESS HOOKS                       */
-/*****************************************************************************/
-
-/* The first pointer argument of a function is stored in ARG0_REGNUM
-   at the function entry point. */
-static CORE_ADDR
-arch_first_pointer_arg_value (void)
-{
-  ULONGEST ret;
-  regcache_cooked_read_unsigned (get_current_regcache (), 0, &ret);
-  return ret;
-}
-
-/* The second pointer argument of a function is stored in ARG0_REGNUM+1
-   at the function entry point. */
-static CORE_ADDR
-arch_second_pointer_arg_value (void)
-{
-  ULONGEST ret;
-  regcache_cooked_read_unsigned (get_current_regcache (), 1, &ret);
-  return ret;
-}
-
-/* The third pointer argument of a function is stored in ARG0_REGNUM+2
-   at the function entry point. */
-static CORE_ADDR
-arch_third_pointer_arg_value (void)
-{
-  ULONGEST ret;
-  regcache_cooked_read_unsigned (get_current_regcache (), 2, &ret);
-  return ret;
-}
-
-/* The return address of a function is stored in PR at the function
-   entry point. */
-static CORE_ADDR
-arch_return_address_at_start_of_function (void)
-{
-  ULONGEST ret;
-  regcache_cooked_read_unsigned (get_current_regcache (), 14, &ret);
-  return ret;
-}
 
 static void
 arch_close (void)
@@ -681,11 +638,6 @@ struct linux_awareness_ops arm_linux_awareness_ops = {
   .lo_is_kernel_address = arch_is_kernel_address,
   .lo_single_step_destination = NULL,
   .lo_clear_cache = arch_clear_cache,
-  .lo_first_pointer_arg_value = arch_first_pointer_arg_value,
-  .lo_second_pointer_arg_value = arch_second_pointer_arg_value,
-  .lo_third_pointer_arg_value = arch_third_pointer_arg_value,
-  .lo_return_address_at_start_of_function =
-    arch_return_address_at_start_of_function,
   .lo_fetch_context_register = arch_fetch_context_register,
   .lo_store_context_register = arch_store_context_register,
   .kernel_offset = 0x0,
