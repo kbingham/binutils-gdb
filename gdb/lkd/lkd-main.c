@@ -1724,59 +1724,6 @@ linux_aware_inner_than (CORE_ADDR lhs, CORE_ADDR rhs)
   return core_addr_lessthan (lhs, rhs);
 }
 
-
-/******************* linux thread filtering *****************/
-
-#ifdef FILTERING_SUPPORT	// fixme: filtering
-/* call back for thread.c to filter thread_list
- **/
-int
-thread_list_filter (struct thread_info *tp, void *ignored)
-{
-  switch (lkd_params.filter)
-    {
-    case lkd_filter_scheduled_only:
-      if ((ptid_get_tid (tp->ptid) == CORE_INVAL)
-	  || (ptid_get_tid (tp->ptid) >= MAX_CORES))
-	delete_thread (tp->ptid);
-      break;
-    }
-  return 0;
-}
-
-void
-set_filter (char *arg, int from_tty, struct cmd_list_element *c)
-{
-  if (lkd_params.filter == lkd_filter_scheduled_only)
-    {
-      printf_filtered ("setting filter to \"scheduled only\".\n");
-    }
-  else
-    {
-      printf_filtered ("resetting filter to default.\n");
-      lkd_params.filter = lkd_filter_none;
-    }
-
-  iterate_over_threads (thread_list_filter, NULL);
-  lkd_proc_invalidate_list ();
-  (void) lkd_proc_get_list ();
-}
-
-void
-show_filter (struct ui_file *f,
-	     int from_tty, struct cmd_list_element *c, const char *v)
-{
-  switch (lkd_params.filter)
-    {
-    case lkd_filter_scheduled_only:
-      fprintf_filtered (f, _("lkd_filter_scheduled_only.\n"));
-      break;
-    default:
-      fprintf_filtered (f, _("no filter.\n"));
-    }
-}
-#endif // fixme: filtering
-
 void
 set_skip_schedule_frame (char *arg, int from_tty, struct cmd_list_element *c)
 {
@@ -1834,17 +1781,6 @@ linux_awareness_init (void)
 			   &set_linux_awareness_cmd_list,
 			   &show_linux_awareness_cmd_list);
 
-#ifdef FILTERING_SUPPORT
-  add_setshow_integer_cmd ("filter",
-			   class_lkd,
-			   (int *) &lkd_params.filter,
-			   "Set/Show the filter on Linux threads",
-			   "Set/Show the filter on Linux threads",
-			   "available filters: \n 1: scheduled only",
-			   &set_filter, &show_filter,
-			   &set_linux_awareness_cmd_list,
-			   &show_linux_awareness_cmd_list);
-#endif
 
   /* Call the user-defined linux_awareness_postinit command if it
      exists. (Allows the user to put code in his .gdbinit that will
