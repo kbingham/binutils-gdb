@@ -48,25 +48,16 @@ int lkd_proc_core_of_thread (ptid_t ptid);
 void lkd_proc_invalidate_list (void);
 void lkd_proc_free_list (void);
 int lkd_proc_refresh_info (int core);
-void lkd_proc_read_symbols (void);
 void lkd_proc_set_symfile (void);
 process_t *lkd_proc_get_list (void);
 process_t *lkd_proc_get_by_ptid (ptid_t ptid);
 process_t *lkd_proc_get_by_task_struct (CORE_ADDR task);
-process_t *lkd_proc_get_selected (void);
 process_t *lkd_proc_get_running (int core);
 CORE_ADDR lkd_proc_get_runqueues (int reset);
 CORE_ADDR lkd_proc_get_rq_curr (int core);
-CORE_ADDR lkd_proc_get_curr_task (int core);
 int lkd_proc_is_curr_task (process_t * ps);
-void lkd_proc_remove_bpts(process_t * ps);
-
-void lkd_dump_proc_list (void);
-void lkd_dump_rq_info (void);
-void lkd_dump_task_struct (CORE_ADDR t);
 
 /*commands*/
-void debug_process_command (char *args, int from_tty);
 void running_task_command (char *args, int from_tty);
 
 #endif /*__LKD_PROCESS_H__*/
