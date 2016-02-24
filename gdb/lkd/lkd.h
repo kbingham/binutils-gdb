@@ -463,8 +463,6 @@ enum linux_aware_debug_domain
   TASK,
   TARGET,
   D_INIT,
-  FRAME,
-  BP,
   KEEP_LAST
 };
 

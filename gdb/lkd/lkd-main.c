@@ -87,8 +87,6 @@ struct debug_domain linux_aware_debug_domains_info[] = {
   {"debug-task", 0},
   {"debug-target", 0},
   {"debug-init", 0},
-  {"debug-frame", 0},
-  {"debug-bp", 0},
   {NULL, 0}
 };
 
