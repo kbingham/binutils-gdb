@@ -104,8 +104,6 @@ extern int display_time;
 #define __trgt_xfer_appen_
 #endif
 
-/*options under development or temporarily disabled.*/
-//#define HAS_PAGE_MONITORING
 
 #ifndef NULL
 #define NULL ((void*)0)

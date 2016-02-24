@@ -1386,17 +1386,6 @@ linux_aware_create_breakpoint_hook (struct breakpoint *bpt)
       /* All the userspace breakpoints are set to a specific task. */
       bpt->thread = ptid_to_global_thread_id (inferior_ptid);
 
-      /* for the time being, until we rework the page monitoring
-       * support btp'ing in usermode pages, "as is" */
-#ifdef HAS_PAGE_MONITORING
-      if (!linux_aware_translate_address_safe (&addr, 1))
-	{
-	  /* The page containing the breakpoint isn't available
-	     yet. */
-	  disable_breakpoint (bpt);
-	  add_monitored_page (bpt, addr);
-	}
-#endif
 
       lkd_install_do_exit_event ();
 
@@ -1414,48 +1403,6 @@ linux_aware_create_breakpoint_hook (struct breakpoint *bpt)
     }
 }
 
-#ifdef HAS_PAGE_MONITORING
-/* This callback is called when a breakpoint is deleted. */
-static void
-linux_aware_delete_breakpoint_hook (struct breakpoint *bpt)
-{
-  struct monitored_page **page = &monitored_pages, *p;
-  struct bp_list **bps, *bp;
-
-  if (lkd_private.loaded != LKD_LOADED)
-    return;
-
-  /* If that breakpoint was the only one requiring a certain
-     monitored page, we can stop monitorin it. */
-  while (*page)
-    {
-      if ((*page)->watchpoint == bpt)
-	{
-	  /* FIXME : we leak the bp_list */
-	  p = *page;
-	  *page = (*page)->next;
-	  xfree (p);
-	  break;
-	}
-
-      bps = &(*page)->bps;
-      while (*bps)
-	{
-	  if ((*bps)->b == bpt)
-	    {
-	      bp = *bps;
-	      *bps = (*bps)->next;
-	      xfree (bp);
-	      create_watchpoint_commands (*page);
-	      return;
-	    }
-	  bps = &(*bps)->next;
-	}
-
-      page = &(*page)->next;
-    }
-}
-#endif
 
 static char *
 get_banner_from_file (bfd * cur_bfd)
@@ -1866,9 +1813,6 @@ linux_awareness_init (void)
   normal_stop_observer = observer_attach_normal_stop (normal_stop_callback);
   observer_attach_breakpoint_created (linux_aware_create_breakpoint_hook);
 
-#ifdef HAS_PAGE_MONITORING
-  observer_attach_breakpoint_deleted (linux_aware_delete_breakpoint_hook);
-#endif
 
   set_gdbarch_inner_than (target_gdbarch (), linux_aware_inner_than);
 
@@ -1879,11 +1823,6 @@ linux_awareness_init (void)
   add_com ("running_task", class_lkd, running_task_command,
 	   "Switch to the currently running task.");
 
-
-#ifdef HAS_PAGE_MONITORING
-  add_com ("wait_page", class_lkd, wait_page_command,
-	   "Make the debugger stop when a given page is mapped to memory.");
-#endif
 
   add_setshow_integer_cmd ("skip_schedule_frame",
 			   class_lkd,
