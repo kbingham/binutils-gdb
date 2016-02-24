@@ -317,22 +317,6 @@ struct linux_awareness_ops
      the cached translations should stay valid. */
   void (*lo_clear_cache) ();
 
-  /* Given the debugger is stopped before the very first instruction
-     of a function, returns the value of the first argument. */
-    CORE_ADDR (*lo_first_pointer_arg_value) ();
-  /* Given the debugger is stopped before the very first instruction
-     of a function, returns the value of the second argument. */
-    CORE_ADDR (*lo_second_pointer_arg_value) ();
-  /* Given the debugger is stopped before the very first instruction
-     of a function, returns the value of the third argument. */
-    CORE_ADDR (*lo_third_pointer_arg_value) ();
-  /* Given the debugger is stopped before the very first instruction
-     of a function, returns the return address of that function. */
-    CORE_ADDR (*lo_return_address_at_start_of_function) ();
-  /* Returns the address of the task_struct that is currently
-     running. Equivalent to the Linux 'current' macro. */
-//  CORE_ADDR (*lo_current_task_struct)(int core);
-//  CORE_ADDR (*lo_current_thread_info)(int core);
   /* Should supply the current regcache with the value of register
      regno in the context of task_struct. This will only be called
      for tasks that are stopped in the scheduler. The way the task
