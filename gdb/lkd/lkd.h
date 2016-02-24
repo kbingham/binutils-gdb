@@ -106,7 +106,6 @@ extern int display_time;
 
 /*options under development or temporarily disabled.*/
 //#define HAS_PAGE_MONITORING
-//#define HAS_ANDROID_SUPPORT
 
 #ifndef NULL
 #define NULL ((void*)0)

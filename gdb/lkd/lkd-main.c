@@ -1880,12 +1880,6 @@ linux_awareness_init (void)
 	   "Switch to the currently running task.");
 
 
-#ifdef HAS_ANDROID_SUPPORT
-  add_com ("wait-android-vm", class_lkd, wait_android_vm_command,
-	   "Make the debugger execute a list of commands when a given "
-	   "Android VM (app_*) is started.");
-#endif
-
 #ifdef HAS_PAGE_MONITORING
   add_com ("wait_page", class_lkd, wait_page_command,
 	   "Make the debugger stop when a given page is mapped to memory.");

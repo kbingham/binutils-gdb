@@ -82,8 +82,6 @@ DECLARE_FIELD (task_struct, prio);
 DECLARE_FIELD (task_struct, cred);
 DECLARE_FIELD (task_struct, comm);	/* far offset in the task_struct, to bulk-read everything needed. */
 
-/*android*/
-DECLARE_FIELD (cred, fsuid);
 
  /**/ DECLARE_FIELD (thread_info, preempt_count);
 DECLARE_FIELD (vm_area_struct, vm_next);
