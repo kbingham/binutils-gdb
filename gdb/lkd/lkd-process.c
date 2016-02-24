@@ -503,6 +503,11 @@ lkd_proc_get_by_ptid (ptid_t ptid)
 
   gdb_assert(!lkd_private.proc_list_invalid);
 
+  /* We must ensure that we don't try to return
+   *  threads created by another layer ... such as the remote layer
+   */
+
+
   if (lwp)
 	  /*non-swapper, ignore TID */
 	  tp = iterate_over_threads (find_thread_lwp, &lwp);
