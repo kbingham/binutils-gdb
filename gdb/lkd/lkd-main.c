@@ -49,17 +49,13 @@
 
 
 #include "lkd.h"
-#include "lkd-android.h"
 #include "lkd-process.h"
-#include "lkd-modules.h"
 
 /******************************* from shtdi.c *********************************/
 /* Signal Handling.  */
 #include <signal.h>
 
 /* A target interrupt has been requested.  */
-static volatile int interrupt_requested = 0;
-static int target_interrupted = 0;
 
 /* A SIGTERM has been requested.  */
 static volatile int terminate_requested = 0;
@@ -73,37 +69,9 @@ static void enable_terminate (void);
 
 /******************************************************************************/
 
-//#define AUTO_ASM /*provide short asm context when not in TUI*/
-
 #define BENEATH linux_aware_ops.beneath
 
-/* This function is normally private to symfile.c, but we export it to
- be able to use it here. */
-char *find_separate_debug_file_by_debuglink (struct objfile *objfile);
-
-/*************************** Copied from breakpoint.c *************************/
-
-extern struct breakpoint *set_raw_breakpoint (struct gdbarch *gdbarch,
-					      struct symtab_and_line,
-					      enum bptype);
-
-extern int hw_watchpoint_used_count (enum bptype type, int *other_type_used);
-
-extern void set_breakpoint_count (int);
-
 struct lkd_private_data lkd_private;
-
-/********************* Handling of the depmod cache ***************************/
-
-/* The actual cache that is maintained in the debugger. */
-struct depmod_cache
-{
-  char *filename;
-  char *modname;		/* points into filename */
-};
-static struct depmod_cache *depmod_cache;
-static int depmod_cache_length, depmod_cache_capacity;
-static time_t depmod_cache_timestamp;
 
 /***************************** Added commands *********************************/
 static char linux_awareness_doc[] = "";
@@ -136,23 +104,12 @@ struct linux_awareness_params lkd_params = {
   .loglevel = 0
 };
 
-/* GDB user experience tuning */
-extern enum auto_boolean pending_break_support;
-
-#ifdef AUTO_ASM
-extern enum auto_boolean disassemble_next_line;
-#endif
 
 /* 'set target-root-prefix' is introduced as an alias for 'set
  solib-absolute-prefix', this variable contains a pointer to the value
  of that variable. */
 char **target_root_prefix;
 static int target_root_prefix_dirty = 1;
-
-/* The 'dmesg' command reads the log buffer in chunks. This is the
- default size of the chunks. It can be set with 'set linux-awareness
- log_chunk_size xxx'. */
-static unsigned int log_chunk_size = 128;
 
 /********************************* GDB glue ***********************************/
 
@@ -201,136 +158,35 @@ struct addr_info *addr_info;
 
 /* Declaration of the required addresses. */
 DECLARE_ADDR (start_kernel);
-DECLARE_ADDR (secondary_start_kernel);
 DECLARE_ADDR (do_exit);
 
-DECLARE_ADDR (init_thread_union);
-DECLARE_ADDR (module_address_lookup);
-DECLARE_ADDR (__symbol_put);
-DECLARE_ADDR (modules);
-DECLARE_ADDR (init_task);
 DECLARE_ADDR (try_to_unmap);
 DECLARE_ADDR (search_binary_handler);
 
-/*Log buffer symbol for dmesg */
-DECLARE_ADDR (log_end);
-DECLARE_ADDR (log_start);
-DECLARE_ADDR (log_buf_len);
-DECLARE_ADDR (__log_buf);
-/* F_KERN_310 */
-DECLARE_ADDR (log_next_idx);
-DECLARE_ADDR (log_first_idx);
-DECLARE_FIELD (log, len);
-DECLARE_FIELD (log, level);
-/* Kernel 3.11+ */
-DECLARE_FIELD (printk_log, len);
-DECLARE_FIELD (printk_log, level);
-
-DECLARE_ADDR (shm_ids);
-DECLARE_ADDR (sem_ids);
-DECLARE_ADDR (msg_ids);
-DECLARE_ADDR (ioport_resource);
-DECLARE_ADDR (iomem_resource);
 DECLARE_ADDR (linux_banner);
-DECLARE_ADDR (saved_command_line);
-DECLARE_ADDR (totalram_pages);
-DECLARE_ADDR (pgdat_list);
-DECLARE_ADDR (contig_page_data);
-DECLARE_ADDR (all_bdevs);
-DECLARE_ADDR (swapper_space);
-DECLARE_ADDR (nr_swap_pages);
-DECLARE_ADDR (totalswap_pages);
-DECLARE_ADDR (nr_swapfiles);
-DECLARE_ADDR (swap_info);
-DECLARE_ADDR (per_cpu__page_states);
-DECLARE_ADDR (totalhigh_pages);
-DECLARE_ADDR (nr_pagecache);
 
-DECLARE_ADDR (vm_committed_space);
-DECLARE_ADDR (vm_committed_as);
-DECLARE_FIELD (percpu_counter, count);
-
-DECLARE_ADDR (sysctl_overcommit_ratio);
-DECLARE_ADDR (vmlist);
-DECLARE_ADDR (nr_huge_pages);
-DECLARE_ADDR (last_pid);
 DECLARE_ADDR (system_utsname);
 DECLARE_ADDR (init_uts_ns);
-DECLARE_ADDR (init_pid_ns);
-DECLARE_ADDR (vm_stat);
-
-DECLARE_ADDR (sys_set_tid_address);
-DECLARE_ADDR (per_cpu__kstat);
 
 /* Structure fields */
-DECLARE_FIELD (block_device, bd_list);
-DECLARE_FIELD (block_device, bd_inode);
+
 DECLARE_FIELD (dentry, d_parent);
 DECLARE_FIELD (dentry, d_name);
-DECLARE_FIELD (dentry, d_flags);
-DECLARE_FIELD (Elf32_Ehdr, e_shnum);
-DECLARE_FIELD (Elf32_Ehdr, e_shstrndx);
-DECLARE_FIELD (Elf32_Shdr, sh_addr);
-DECLARE_FIELD (Elf32_Shdr, sh_name);
-DECLARE_FIELD (Elf32_Shdr, sh_flags);
-DECLARE_FIELD (Elf32_Shdr, sh_link);
-DECLARE_FIELD (Elf32_Shdr, sh_type);
-DECLARE_FIELD (file, f_dentry);
+
 DECLARE_FIELD (file, f_path);
-DECLARE_FIELD (file_system_type, name);
-DECLARE_FIELD (inode, i_mapping);
+
 
 DECLARE_FIELD (list_head, next);
 DECLARE_FIELD (mm_struct, mmap);
-DECLARE_FIELD (mm_struct, map_count);
-DECLARE_FIELD (mm_struct, arg_start);
-DECLARE_FIELD (mm_struct, arg_end);
-DECLARE_FIELD (mm_struct, env_start);
-DECLARE_FIELD (mm_struct, env_end);
-DECLARE_FIELD (mm_struct, pgd);
-DECLARE_FIELD (task_struct, active_mm);
-DECLARE_FIELD (mnt_namespace, list);
- /**/ DECLARE_FIELD (module, list);
-DECLARE_FIELD (module, name);
-DECLARE_FIELD (module, init);
-DECLARE_FIELD (module, module_init);
-DECLARE_FIELD (module, module_core);
-DECLARE_FIELD (module, init_size);
-DECLARE_FIELD (module, init_text_size);
-DECLARE_FIELD (module, core_size);
-DECLARE_FIELD (module, core_text_size);
-DECLARE_FIELD (module, args);	/* far offset in the modules structure, to bulk-read everything needed. */
- /**/ DECLARE_FIELD (msg_queue, q_cbytes);
-DECLARE_FIELD (msg_queue, q_qnum);
-DECLARE_FIELD (namespace, list);
-DECLARE_FIELD (nsproxy, ipc_ns);
-DECLARE_FIELD (nsproxy, mnt_ns);
 
 DECLARE_FIELD (new_utsname, release);
-DECLARE_FIELD (page_state, nr_dirty);
-DECLARE_FIELD (page_state, nr_mapped);
-DECLARE_FIELD (page_state, nr_writeback);
-DECLARE_FIELD (page_state, nr_slab);
-DECLARE_FIELD (page_state, nr_page_table_pages);
+
 DECLARE_FIELD (path, dentry);
-DECLARE_FIELD (pglist_data, node_zones);
-DECLARE_FIELD (pglist_data, pgdat_next);
+
 DECLARE_FIELD (pid_namespace, last_pid);
 DECLARE_FIELD (qstr, len);
 DECLARE_FIELD (qstr, name);
-DECLARE_FIELD (resource, name);
-DECLARE_FIELD (resource, start);
-DECLARE_FIELD (resource, end);
-DECLARE_FIELD (resource, parent);
-DECLARE_FIELD (resource, child);
-DECLARE_FIELD (resource, sibling);
-DECLARE_FIELD (sem_array, sem_nsems);
-DECLARE_FIELD (shmid_kernel, shm_nattch);
-DECLARE_FIELD (shmid_kernel, shm_segsz);
-DECLARE_FIELD (super_block, s_type);
-DECLARE_FIELD (super_block, s_flags);
-DECLARE_FIELD (swap_info_struct, flags);
-DECLARE_FIELD (swap_info_struct, inuse_pages);
+
  /**/ DECLARE_FIELD (task_struct, mm);
 DECLARE_FIELD (task_struct, tasks);
 DECLARE_FIELD (task_struct, children);
@@ -344,8 +200,7 @@ DECLARE_FIELD (task_struct, prio);
 DECLARE_FIELD (task_struct, cred);
 DECLARE_FIELD (task_struct, comm);	/* far offset in the task_struct, to bulk-read everything needed. */
 
-/*android*/
-DECLARE_FIELD (cred, fsuid);
+
 
  /**/ DECLARE_FIELD (thread_info, preempt_count);
 DECLARE_FIELD (uts_namespace, name);
@@ -355,28 +210,7 @@ DECLARE_FIELD (vm_area_struct, vm_flags);
 DECLARE_FIELD (vm_area_struct, vm_start);
 DECLARE_FIELD (vm_area_struct, vm_end);
 DECLARE_FIELD (vm_area_struct, vm_pgoff);
-DECLARE_FIELD (vm_struct, next);
-DECLARE_FIELD (vm_struct, size);
 
-DECLARE_FIELD (vfsmount, mnt_sb);
-DECLARE_FIELD (vfsmount, mnt_flags);
-
-/*2.6*/
-DECLARE_FIELD (vfsmount, mnt_list);
-DECLARE_FIELD (vfsmount, mnt_parent);
-DECLARE_FIELD (vfsmount, mnt_devname);
-DECLARE_FIELD (vfsmount, mnt_mountpoint);
-
-/*3.3*/
-DECLARE_FIELD (mount, mnt);
-DECLARE_FIELD (mount, mnt_list);
-DECLARE_FIELD (mount, mnt_parent);
-DECLARE_FIELD (mount, mnt_devname);
-DECLARE_FIELD (mount, mnt_mountpoint);
-
-DECLARE_FIELD (zone, free_pages);
-DECLARE_FIELD (zone, nr_active);
-DECLARE_FIELD (zone, nr_inactive);
 
 int max_cores = MAX_CORES;
 
@@ -449,27 +283,6 @@ struct bp_list
   struct breakpoint *b;
 };
 
-#ifdef HAS_PAGE_MONITORING
-
-struct monitored_page
-{
-  struct monitored_page *next;
-  CORE_ADDR addr;
-  CORE_ADDR virt_addr;
-  int stop;
-  struct breakpoint *watchpoint;
-  struct bp_list *bps;
-};
-
-static struct monitored_page *monitored_pages;
-
-struct monitored_page;
-static void add_bpt_to_monitored_page (struct monitored_page *page,
-				       struct breakpoint *bpt);
-static struct monitored_page *find_monitored_page (CORE_ADDR addr);
-static struct monitored_page *create_monitored_page (CORE_ADDR addr,
-						     struct breakpoint *bp);
-#endif
 
 /* This key is used to store a reference count associated with GDB
  objfiles. Objfiles are shared between userspace thread of the same
@@ -478,13 +291,6 @@ static struct monitored_page *create_monitored_page (CORE_ADDR addr,
 const struct objfile_data *linux_uprocess_objfile_data_key;
 
 /****************** Local functions forward declarations **********************/
-
-static void (*deprecated_call_command_chain) (struct cmd_list_element * c,
-					      char *cmd, int from_tty);
-static void (*deprecated_create_breakpoint_chain) (struct breakpoint * bpt);
-static void (*deprecated_delete_breakpoint_chain) (struct breakpoint * bpt);
-static void (*deprecated_context_chain) (int id);
-
 static void normal_stop_callback (struct bpstats *bs, int);
 
 /***************** End Local functions forward declarations *******************/
@@ -1053,7 +859,6 @@ linux_aware_store_registers (struct target_ops *ops,
 }
 
 
-
 /* This is the target_ops callback that is called by GDB to start the
  execution of the processor. */
 static void
@@ -1508,267 +1313,6 @@ init_linux_aware_target (void)
   linux_aware_ops.to_is_async_p = linux_aware_is_async_p;
 }
 
-#ifdef HAS_PAGE_MONITORING
-
-/* This function create the commands that will be executed when the
- watchpoint that monitors a page triggers. */
-static void
-create_watchpoint_commands (struct monitored_page *page)
-{
-  struct command_line **cmds;
-  struct bp_list *bps = page->bps;
-
-  free_command_lines ((struct command_line **) &(page->watchpoint->commands));
-
-  /* Don't mention the watchpoint when it's hit. */
-  cmds = (struct command_line **) &page->watchpoint->commands;
-  *cmds = xmalloc (sizeof (struct command_line));
-  (*cmds)->line = xstrdup ("silent");
-  (*cmds)->control_type = simple_control;
-  (*cmds)->body_count = 0;
-  (*cmds)->next = NULL;
-
-  /* If we stop execution, print a message explaining why. */
-  if (page->stop)
-    {
-      cmds = &(*cmds)->next;
-      *cmds = xmalloc (sizeof (struct command_line));
-      (*cmds)->line =
-	xstrprintf
-	("printf \"The page at address 0x%s has just been mapped to memory.\n\"",
-	 phex (page->virt_addr, 4));
-      (*cmds)->control_type = simple_control;
-      (*cmds)->body_count = 0;
-    }
-
-  /* Enable all the breakpoints on the waited page. The breakpoints
-     are already created but disabled. */
-  if (bps != NULL)
-    do
-      {
-	cmds = &(*cmds)->next;
-	*cmds = xmalloc (sizeof (struct command_line));
-	(*cmds)->line = xstrprintf ("enable %i", bps->b->number);
-	(*cmds)->control_type = simple_control;
-	(*cmds)->body_count = 0;
-	bps = bps->next;
-      }
-    while (bps);
-
-  /* Delete the watchpoint. */
-  cmds = &(*cmds)->next;
-  *cmds = xmalloc (sizeof (struct command_line));
-  (*cmds)->line = xstrprintf ("delete %i", page->watchpoint->number);
-  (*cmds)->control_type = simple_control;
-  (*cmds)->body_count = 0;
-
-  /* If we don't want to stop, restart execution. */
-  if (!page->stop)
-    {
-      cmds = &(*cmds)->next;
-      *cmds = xmalloc (sizeof (struct command_line));
-      (*cmds)->line = xstrdup ("continue");
-      (*cmds)->control_type = simple_control;
-      (*cmds)->body_count = 0;
-    }
-
-  (*cmds)->next = NULL;
-}
-
-/* Monitor a page mapping event for page table entry at ADDR, and
- insert the breakpoint BP when the page is mapped to memory. */
-static struct monitored_page *
-create_monitored_page (CORE_ADDR addr, struct breakpoint *bp)
-{
-  struct monitored_page *res = xmalloc (sizeof (struct monitored_page));
-  int bpnum, i, other_type_used, target_resources_ok;
-  struct symtab_and_line sal;
-  char *text, *exp_text;
-  struct expression *exp;
-  struct value *val, *mark;
-  struct breakpoint *b;
-
-  res->next = monitored_pages;
-  monitored_pages = res;
-
-  res->addr = addr;
-  if (bp != NULL)
-    {
-      res->bps = xmalloc (sizeof (struct bp_list));
-      res->bps->next = NULL;
-      res->bps->b = bp;
-    }
-  else
-    res->bps = NULL;
-
-  res->stop = 0;
-
-  /* Create the watchpoint expression. */
-  init_sal (&sal);		/* initialize to zeroes */
-
-  sal.pspace = current_program_space;
-
-  text = xstrprintf ("*0x%s", phex (addr, 4));
-  exp_text = text;
-  exp = parse_exp_1 (&exp_text, 0, 0);
-  mark = value_mark ();
-  val = evaluate_expression (exp);
-  release_value (val);
-  if (value_lazy (val))
-    value_fetch_lazy (val);
-
-  /* Check if we have enough watchpoints available. */
-  i = hw_watchpoint_used_count (bp_hardware_watchpoint, &other_type_used);
-  target_resources_ok =
-    target_can_use_hardware_watchpoint (bp_hardware_watchpoint, i + 1,
-					other_type_used);
-
-  if (target_resources_ok <= 0)
-    {
-      /* FIXME : leaks */
-      warning ("The hardware watchpoints are exhausted.\n"
-	       "The debugger is unable to monitor this page's load.");
-      return NULL;
-    }
-
-  /* Create the watchpoint. */
-  b = set_raw_breakpoint (target_gdbarch (), sal, bp_hardware_watchpoint);
-  set_breakpoint_count (breakpoint_count + 1);
-  b->number = breakpoint_count;
-  b->disposition = disp_donttouch;
-  b->exp = exp;
-  b->exp_valid_block = NULL;
-  b->exp_string = savestring (text, exp_text - text);
-  xfree (text);
-  b->val = val;
-  b->loc->cond = NULL;
-  if (bp != NULL)
-    b->thread = bp->thread;
-  else
-    b->thread = pid_to_thread_id (inferior_ptid);
-  b->commands = NULL;
-
-  res->watchpoint = b;
-
-  /* Create the watchpoint commands. */
-  create_watchpoint_commands (res);
-  return res;
-}
-
-/* If we try to insert a breakpoint on a page not yet mapped to
- memory, but already monitored, we'll end up here. */
-static void
-add_bpt_to_monitored_page (struct monitored_page *page,
-			   struct breakpoint *bpt)
-{
-  struct bp_list *list = xmalloc (sizeof (struct bp_list));
-  list->next = page->bps;
-  list->b = bpt;
-  page->bps = list;
-
-  /* Regenerate commands with the new breakpoint. */
-  create_watchpoint_commands (page);
-}
-
-/* Check if the page table entry at ADDR is already monitored. */
-static struct monitored_page *
-find_monitored_page (CORE_ADDR addr)
-{
-  struct monitored_page *page = monitored_pages;
-
-  while (page != NULL)
-    {
-      if (page->addr == addr)
-	break;
-      page = page->next;
-    }
-
-  return page;
-}
-
-/* This function is called when the user tries to set the breakpoint
- BPT at address ADDR, which isn't yet mapped to memory. */
-static struct monitored_page *
-add_monitored_page (struct breakpoint *bpt, CORE_ADDR addr)
-{
-  CORE_ADDR faulty_addr;
-  struct monitored_page *res;
-  process_t *ps = lkd_proc_get_by_ptid (inferior_ptid);
-  faulty_addr =
-    linux_awareness_ops->lo_translate_memory_watch_address (addr, ps);
-  if (!faulty_addr)
-    {
-      error ("Could not find a place to put the page watchpoint.");
-    }
-
-  res = find_monitored_page (faulty_addr);
-
-  if (res == NULL)
-    {
-      if (yquery
-	  ("The page where you tried to set a breakpoint is not currently mapped to\n"
-	   "memory. The debugger can monitor the page load and set the breakpoint when it\n"
-	   "gets loaded. This will use a hardware watchpoint. Do you want the debugger to\n"
-	   "monitor the page load? "))
-	{
-	  res = create_monitored_page (faulty_addr, bpt);
-	}
-      if (res == NULL)
-	warning ("Your breakpoint has been disabled.");
-    }
-  else
-    {
-      add_bpt_to_monitored_page (res, bpt);
-    }
-  return res;
-}
-
-/* Evaluates the passed expression as an address and sets up a
- watchpoint that'll trigger when that address is ammped to memory. */
-static void
-wait_page_command (char *args, int from_tty)
-{
-  enum page_status stat;
-  CORE_ADDR addr = parse_and_eval_address (args);
-  CORE_ADDR orig_addr = addr;
-  process_t *ps;
-  CORE_ADDR faulty_addr;
-  struct monitored_page *res;
-
-  if (lkd_private.loaded != LKD_LOADED)
-    {
-      printf_filtered (LA_NOT_LOADED_STRING);
-      return;
-    }
-
-  ps = lkd_proc_get_by_ptid (inferior_ptid);
-
-  stat = linux_awareness_ops->lo_translate_memory_address (&addr, ps);
-  if (stat == PAGE_PRESENT)
-    {
-      printf_filtered ("The page is already in memory!\n");
-      return;
-    }
-
-  faulty_addr
-    = linux_awareness_ops->lo_translate_memory_watch_address (orig_addr, ps);
-
-  res = find_monitored_page (faulty_addr);
-
-  if (res == NULL)
-    {
-      res = create_monitored_page (faulty_addr, NULL);
-    }
-
-  /* create_monitored_page will have emited a warning if needed.  */
-  if (res != NULL)
-    {
-      res->stop = 1;
-      res->virt_addr = orig_addr;
-      create_watchpoint_commands (res);
-    }
-}
-#endif
 
 
 /* This function is here to replace the default display for

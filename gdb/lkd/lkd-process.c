@@ -39,7 +39,6 @@
 
 #include "tui/tui.h"
 #include "lkd.h"
-#include "lkd-android.h"
 #include "lkd-process.h"
 
 #define BENEATH linux_aware_ops.beneath

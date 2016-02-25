@@ -279,6 +279,7 @@ struct linux_awareness_ops
   /* Called before the processor is resumed. Can be NULL. */
   void (*lo_pre_exec_start) ();
 
+
   /* Returns wether the page containing addr in the context of task_struct
      is mapped as writable. */
   int (*lo_can_write) (CORE_ADDR addr, CORE_ADDR task_struct);
