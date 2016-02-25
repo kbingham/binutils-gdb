@@ -722,7 +722,8 @@ ALL_TARGET_OBS = \
 	windows-tdep.o \
 	linux-record.o \
 	ravenscar-thread.o \
-	lkd-main.o lkd-process.o
+	lkd-main.o lkd-process.o \
+	lkd-arm.o
 
 # Host-dependent makefile fragment comes in here.
 @host_makefile_frag@
@@ -2727,6 +2728,8 @@ py-varobj.o: $(srcdir)/python/py-varobj.c
 
 lkd-main.o: $(srcdir)/lkd/lkd-main.c
 lkd-process.o: $(srcdir)/lkd/lkd-process.c
+
+lkd-arm.o: $(srcdir)/lkd/lkd-arm.c
 
 # Generalised lkd-compile rule
 lkd-%:

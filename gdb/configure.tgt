@@ -730,6 +730,10 @@ done
 # Add linux kernel awareness obs and set no default OS ABI
 if test x"$enable_linux_kernel_aware" = xyes; then
   gdb_target_obs="$gdb_target_obs lkd-main.o lkd-process.o"
+  case "${targ}" in
+  arm*-*-linux*)
+	  gdb_target_obs="$gdb_target_obs lkd-arm.o" ;;
+  esac
   gdb_osabi=
 fi
 
