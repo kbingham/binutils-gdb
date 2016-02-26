@@ -109,8 +109,6 @@ CORE_ADDR rq_idle[MAX_CORES];	/*rq->idle */
 static int process_counts[MAX_CORES];
 static int last_pid;
 
-struct mmu_infos mmu_info[MAX_CORES];
-
 
 static int
 find_thread_lwp (struct thread_info *tp, void *arg)
@@ -715,7 +713,6 @@ lkd_proc_init (void)
   struct cleanup *cleanup;
 
   memset (per_cpu_offset, 0, MAX_CORES * sizeof (uint32_t));
-  memset (mmu_info, 0, MAX_CORES * sizeof (struct mmu_infos));
 
   /* ensure thread list from beneath target is up to date */
   cleanup = make_cleanup_restore_integer (&print_thread_events);
