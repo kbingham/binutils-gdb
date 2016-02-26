@@ -1591,9 +1591,20 @@ lkd_loaded_set (char *arg, int from_tty, struct cmd_list_element *c)
 	  goto __sl_fail;
 	}
 
+      if (DEBUG_DOMAIN (D_INIT))
+	{
+	  printf_filtered("Thread List PRE lkd_proc_init()\n");
+	  iterate_over_threads (dump_thread_list, NULL);
+	}
 
       /* (re)init the thread_list with hardware threads */
       lkd_proc_init ();
+
+      if (DEBUG_DOMAIN (D_INIT))
+	{
+	  printf_filtered("Thread List POST lkd_proc_init()\n");
+	  iterate_over_threads (dump_thread_list, NULL);
+	}
 
       /*do arch-specific fixup (mmu for instance) */
       linux_aware_post_load (file_name, 0);
@@ -1644,6 +1655,12 @@ lkd_loaded_set (char *arg, int from_tty, struct cmd_list_element *c)
     }
 
   printf_filtered ("Kernel image version: %s\n", lkd_private.utsname_release);
+
+  if (DEBUG_DOMAIN (D_INIT))
+	{
+	  printf_filtered("Thread List Post Loaded Set()\n");
+	  iterate_over_threads (dump_thread_list, NULL);
+	}
 
   return;
 
