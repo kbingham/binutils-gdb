@@ -604,21 +604,20 @@ lkd_reset_thread_list (void)
    */
   init_thread_list ();
 
-  DBG_IF (D_INIT)
-	iterate_over_threads (dump_thread_list, NULL);
-  DBG_ENDIF (D_INIT)
-    /* setup LKD "thread alive" method to return FALSE and "find new threads"
-       method to call the BENEATH version */
-    lkd_private.loaded = LKD_LOADING;
+  if (DEBUG_DOMAIN (D_INIT))
+    iterate_over_threads (dump_thread_list, NULL);
+
+  /* setup LKD "thread alive" method to return FALSE and "find new threads"
+     method to call the BENEATH version */
+  lkd_private.loaded = LKD_LOADING;
 
   cleanup = make_cleanup_restore_integer (&print_thread_events);
   print_thread_events = 0;
   update_thread_list ();
   do_cleanups (cleanup);
 
-  DBG_IF (D_INIT)
-	iterate_over_threads (dump_thread_list, NULL);
-  DBG_ENDIF (D_INIT)
+  if (DEBUG_DOMAIN (D_INIT))
+    iterate_over_threads (dump_thread_list, NULL);
 
   tp = any_live_thread_of_process (pid);
   gdb_assert (tp != NULL);	/* A live thread must exist.  */
@@ -682,7 +681,7 @@ extra_thread_info_ext (struct thread_info *thread)
 
   ps = (process_t *) thread->priv;
 
-  DBG_IF (TASK) if (!ps)
+  if (DEBUG_DOMAIN (TASK) && !ps)
     {
       printf_filtered ("thread_info %p not found in process_list\n", thread);
       printf_filtered ("  thread_info.ptid = {%d, %ld, %ld}\n",
@@ -692,32 +691,41 @@ extra_thread_info_ext (struct thread_info *thread)
       printf_filtered ("  thread_info.num = %d.%d\n", thread->global_num,
 		       thread->per_inf_num);
     }
-  DBG_ENDIF (TASK) if (ps)
+
+
+  if (ps)
     {
       core = ps->core;
 
-      DBG_IF (TASK) if (core != CORE_INVAL)
-	pos += sprintf (pos,
-			"lwp=%li, tid=%li, gdbt=%lx, task_str=%lx-%lx",
-			ptid_get_lwp (PTID_OF (ps)),
-			ptid_get_tid (PTID_OF (ps)),
-			(unsigned long) ps->gdb_thread,
-			(unsigned long) ps->task_struct,
-			(unsigned long) lkd_proc_get_rq_curr (core));
+      if (DEBUG_DOMAIN (TASK))
+	{
+	  if (core != CORE_INVAL)
+	    pos += sprintf (pos,
+			    "lwp=%li, tid=%li, gdbt=%lx, task_str=%lx-%lx",
+			    ptid_get_lwp (PTID_OF (ps)),
+			    ptid_get_tid (PTID_OF (ps)),
+			    (unsigned long) ps->gdb_thread,
+			    (unsigned long) ps->task_struct,
+			    (unsigned long) lkd_proc_get_rq_curr (core));
+	  else
+	    pos += sprintf (pos,
+			    "lwp=%li, tid=%li, gdbt=%lx, task_str=%lx",
+			    ptid_get_lwp (PTID_OF (ps)),
+			    ptid_get_tid (PTID_OF (ps)),
+			    (unsigned long) ps->gdb_thread,
+			    (unsigned long) ps->task_struct);
+	}
       else
-	pos += sprintf (pos,
-			"lwp=%li, tid=%li, gdbt=%lx, task_str=%lx",
-			ptid_get_lwp (PTID_OF (ps)),
-			ptid_get_tid (PTID_OF (ps)),
-			(unsigned long) ps->gdb_thread,
-			(unsigned long) ps->task_struct);
-      DBG_ELSE if (ps->tgid == ptid_get_lwp (PTID_OF (ps)))
-	/* thread group leader */
-	pos += sprintf (pos, "TGID:%i", ps->tgid);
-      else
-	/* thread of a thread group */
-	pos += sprintf (pos, "|----%li", ptid_get_lwp (PTID_OF (ps)));
-      DBG_ENDIF (TASK) if (lkd_proc_is_curr_task (ps))
+	{
+	  if (ps->tgid == ptid_get_lwp (PTID_OF (ps)))
+	    /* thread group leader */
+	    pos += sprintf (pos, "TGID:%i", ps->tgid);
+	  else
+	    /* thread of a thread group */
+	    pos += sprintf (pos, "|----%li", ptid_get_lwp (PTID_OF (ps)));
+	}
+
+      if (lkd_proc_is_curr_task (ps))
 	{
 	  pos += sprintf (pos, " <C%u>", core);
 

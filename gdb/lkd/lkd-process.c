@@ -257,18 +257,20 @@ get_task_info (CORE_ADDR task_struct, process_t ** ps,
   /* allocate if not found
    */
   if (!l_ps->gdb_thread)
-   {
-      DBG_IF (TASK)
-	/*sanity check : go through the list and check if lwp already there */
-      process_t *tps = process_list;
-
-      while (tps && (tps)->valid)
+    {
+      if (DEBUG_DOMAIN (TASK))
 	{
-	  if (lwp && (tps)->gdb_thread && (ptid_get_lwp(PTID_OF (tps)) == lwp))
-	    gdb_assert (0);
-	  tps = tps->next;
-	};
-      DBG_ENDIF (TASK)
+	  /*sanity check : go through the list and check if lwp already there */
+	  process_t *tps = process_list;
+
+	  while (tps && (tps)->valid)
+	    {
+	      if (lwp && (tps)->gdb_thread
+		  && (ptid_get_lwp (PTID_OF (tps)) == lwp))
+		gdb_assert (0);
+	      tps = tps->next;
+	    };
+	}
 
       /* add with info so that pid_to_string works. */
       l_ps->gdb_thread =  add_thread_with_info (this_ptid,
@@ -598,8 +600,9 @@ lkd_proc_get_runqueues (int reset)
 	}
       /* check validity */
 
-    DBG_IF (TASK)
-     if (HAS_FIELD (raw_spinlock, magic))
+  if (DEBUG_DOMAIN (TASK))
+    {
+      if (HAS_FIELD (raw_spinlock, magic))
 	{
 
 	  CORE_ADDR lock_magic = ADDR (runqueues)
@@ -614,7 +617,7 @@ lkd_proc_get_runqueues (int reset)
 	}
       else
 	printf_filtered ("runqueues access validated OK.");
-    DBG_ENDIF (TASK)
+    }
 
   return runqueues_addr;
 }

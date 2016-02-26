@@ -439,9 +439,7 @@ enum linux_aware_debug_domain
 				fprintf_filtered(gdb_stdlog, "linux: " __VA_ARGS__);})
 
 /*do thing a different way in debug mode.*/
-#define DBG_IF(domain)          if (linux_aware_debug_domains_info[domain].level) {
-#define DBG_ELSE                } else {
-#define DBG_ENDIF(domain)       }
+#define DEBUG_DOMAIN(domain) (linux_aware_debug_domains_info[domain].level)
 
 #define LA_NOT_LOADED_STRING "Please type \"set linux-awareness loaded\".\n"
 
