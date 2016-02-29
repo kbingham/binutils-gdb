@@ -2729,7 +2729,7 @@ py-varobj.o: $(srcdir)/python/py-varobj.c
 lkd-main.o: $(srcdir)/lkd/lkd-main.c $(srcdir)/lkd/lkd.h
 lkd-process.o: $(srcdir)/lkd/lkd-process.c $(srcdir)/lkd/lkd.h
 
-lkd-arm.o: $(srcdir)/lkd/lkd-arm.c
+lkd-arm.o: $(srcdir)/lkd/lkd-arm.c $(srcdir)/lkd/lkd.h
 
 # Generalised lkd-compile rule
 lkd-%:
