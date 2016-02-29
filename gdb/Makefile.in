@@ -2726,8 +2726,8 @@ py-varobj.o: $(srcdir)/python/py-varobj.c
 # Need to explicitly specify the compile rule as make will do nothing
 # or try to compile the object file into the sub-directory.
 
-lkd-main.o: $(srcdir)/lkd/lkd-main.c
-lkd-process.o: $(srcdir)/lkd/lkd-process.c
+lkd-main.o: $(srcdir)/lkd/lkd-main.c $(srcdir)/lkd/lkd.h
+lkd-process.o: $(srcdir)/lkd/lkd-process.c $(srcdir)/lkd/lkd.h
 
 lkd-arm.o: $(srcdir)/lkd/lkd-arm.c
 
