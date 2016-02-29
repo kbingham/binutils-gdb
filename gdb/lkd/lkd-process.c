@@ -613,7 +613,7 @@ lkd_proc_get_runqueues (int reset)
 	    error ("accessing the core runqueues seems to be compromised.");
 	}
       else
-	printf_filtered ("runqueues access validated OK.");
+	printf_filtered ("runqueues access validated OK.\n");
     }
 
   return runqueues_addr;
