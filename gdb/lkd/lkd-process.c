@@ -109,7 +109,6 @@ CORE_ADDR rq_idle[MAX_CORES];	/*rq->idle */
 static int process_counts[MAX_CORES];
 static int last_pid;
 
-
 static int
 find_thread_lwp (struct thread_info *tp, void *arg)
 {
@@ -125,10 +124,8 @@ find_thread_swapper (struct thread_info *tp, void *arg)
 
   if ((!ptid_get_lwp(tp->ptid)) && (ptid_get_tid(tp->ptid) == core))
     {
-      DEBUG (TASK, 2, "swapper found: tp->ptid(%d-%ld-%ld) core=%ld\n",
-	     ptid_get_pid(tp->ptid),
-	     ptid_get_lwp(tp->ptid),
-	     ptid_get_tid(tp->ptid),
+      DEBUG (TASK, 2, "swapper found: tp->ptid(%s) core=%ld\n",
+	     ptid_to_str(tp->ptid),
 	     core);
       return 1;
     }
@@ -827,9 +824,7 @@ lkd_proc_refresh_info (int cur_core)
   if (!wait_process)
     return 0;
 
-  DEBUG (TASK, 1, "wait_process: lwp = %ld\n", ptid_get_lwp(PTID_OF (wait_process)));
-  DEBUG (TASK, 1, "wait_process: pid = %d\n", ptid_get_pid(PTID_OF (wait_process)));
-  DEBUG (TASK, 1, "wait_process: tid = %ld\n", ptid_get_tid(PTID_OF (wait_process)));
+  DEBUG (TASK, 1, "wait_process: {%s}\n", ptid_to_str(PTID_OF(wait_process)));
 
   gdb_assert(wait_process->gdb_thread);
   gdb_assert((process_t *) wait_process->gdb_thread->priv == wait_process);

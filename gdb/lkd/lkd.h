@@ -473,6 +473,18 @@ linux_get_field_size (struct field_info *field)
   return field->size;
 }
 
+static inline char *
+ptid_to_str(ptid_t ptid)
+{
+  static char str[32];
+  snprintf(str, sizeof(str)-1, "%d:%ld:%ld",
+	   ptid_get_pid(ptid),
+	   ptid_get_lwp(ptid),
+	   ptid_get_tid(ptid));
+
+  return str;
+}
+
 int lkd_try_push_target (void);
 void lkd_uninstall_do_exit_event (void);
 

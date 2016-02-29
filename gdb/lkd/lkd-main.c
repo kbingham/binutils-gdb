@@ -581,10 +581,9 @@ extern void nullify_last_target_wait_ptid (void);
 static int
 dump_thread_list (struct thread_info *tp, void *ignored)
 {
-  printf_filtered ("thread_list: {%d.%d}= {%d-%ld-%ld}\n",
+  printf_filtered ("thread_list: {%d.%d}= {%s}\n",
 		   tp->global_num, tp->per_inf_num,
-		   ptid_get_pid (tp->ptid),
-		   ptid_get_lwp (tp->ptid), ptid_get_tid (tp->ptid));
+		   ptid_to_str(tp->ptid));
   return 0;
 }
 
@@ -684,10 +683,7 @@ extra_thread_info_ext (struct thread_info *thread)
   if (DEBUG_DOMAIN (TASK) && !ps)
     {
       printf_filtered ("thread_info %p not found in process_list\n", thread);
-      printf_filtered ("  thread_info.ptid = {%d, %ld, %ld}\n",
-		       ptid_get_pid (thread->ptid),
-		       ptid_get_lwp (thread->ptid),
-		       ptid_get_tid (thread->ptid));
+      printf_filtered ("  thread_info.ptid = {%s}\n", ptid_to_str(thread->ptid));
       printf_filtered ("  thread_info.num = %d.%d\n", thread->global_num,
 		       thread->per_inf_num);
     }
@@ -701,17 +697,15 @@ extra_thread_info_ext (struct thread_info *thread)
 	{
 	  if (core != CORE_INVAL)
 	    pos += sprintf (pos,
-			    "lwp=%li, tid=%li, gdbt=%lx, task_str=%lx-%lx",
-			    ptid_get_lwp (PTID_OF (ps)),
-			    ptid_get_tid (PTID_OF (ps)),
+			    "{%s}, gdbt=%lx, task_str=%lx-%lx",
+			    ptid_to_str(PTID_OF (ps)),
 			    (unsigned long) ps->gdb_thread,
 			    (unsigned long) ps->task_struct,
 			    (unsigned long) lkd_proc_get_rq_curr (core));
 	  else
 	    pos += sprintf (pos,
-			    "lwp=%li, tid=%li, gdbt=%lx, task_str=%lx",
-			    ptid_get_lwp (PTID_OF (ps)),
-			    ptid_get_tid (PTID_OF (ps)),
+			    "{%s}, gdbt=%lx, task_str=%lx",
+			    ptid_to_str(PTID_OF (ps)),
 			    (unsigned long) ps->gdb_thread,
 			    (unsigned long) ps->task_struct);
 	}
@@ -2019,8 +2013,8 @@ static ptid_t target_thread_ptid;
 static void
 linux_awareness_target_thread_changed (ptid_t ptid)
 {
-  DEBUG (D_INIT, 1, "linux_awareness_target_thread_changed {%d, %ld, %ld}\n",
-	 ptid_get_pid (ptid), ptid_get_lwp (ptid), ptid_get_tid (ptid));
+  DEBUG (D_INIT, 1, "linux_awareness_target_thread_changed {%s}\n",
+	 ptid_to_str (ptid));
 
   if (ptid_equal (ptid, null_ptid) || ptid_equal (ptid, minus_one_ptid))
     target_thread_ptid = null_ptid;
