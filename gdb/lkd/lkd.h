@@ -412,14 +412,16 @@ struct field_info
  * I come up with a better name
  */
 
-// First match the existing system : (Then we'll swap)
-#define lkd_ptid_build(inferior_pid, process, core) ptid_build(inferior_pid, process, core)
+// lkd_ptid_build swaps the usage of lwp/tid.
+// This is an intermediate stage before changing the order of the parameters
+// We may want to keep the indirect macro though to support STMC conversion process.
+#define lkd_ptid_build(inferior_pid, process, core) ptid_build(inferior_pid, core, process)
 
-#define lkd_ptid_to_core(ptid) ptid_get_tid(ptid)
-#define lkd_ptid_to_pid(ptid) ptid_get_lwp(ptid)
+#define lkd_ptid_to_core(ptid) ptid_get_lwp(ptid)
+#define lkd_ptid_to_pid(ptid) ptid_get_tid(ptid)
 
-#define LKD_PTID_SET_CORE(ptid, core) do { ptid.tid = core; } while (0)
-#define LKD_PTID_SET_PID(ptid, pid) do { ptid.lwp = pid; } while (0)
+#define LKD_PTID_SET_CORE(ptid, core) do { ptid.lwp = core; } while (0)
+#define LKD_PTID_SET_PID(ptid, pid) do { ptid.tid = pid; } while (0)
 
 
 enum page_status
