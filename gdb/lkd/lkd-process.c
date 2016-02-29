@@ -110,11 +110,11 @@ static int process_counts[MAX_CORES];
 static int last_pid;
 
 static int
-find_thread_lwp (struct thread_info *tp, void *arg)
+find_thread_lkd_pid (struct thread_info *tp, void *arg)
 {
-  long lwp = *(long*)arg;
+  long pid = *(long*)arg;
 
-  return (ptid_get_lwp(tp->ptid) == lwp);
+  return (lkd_ptid_to_pid(tp->ptid) == pid);
 }
 
 static int
@@ -122,7 +122,7 @@ find_thread_swapper (struct thread_info *tp, void *arg)
 {
   long core = *(long*)arg;
 
-  if ((!ptid_get_lwp(tp->ptid)) && (ptid_get_tid(tp->ptid) == core))
+  if ((!lkd_ptid_to_pid(tp->ptid)) && (lkd_ptid_to_core(tp->ptid) == core))
     {
       DEBUG (TASK, 2, "swapper found: tp->ptid(%s) core=%ld\n",
 	     ptid_to_str(tp->ptid),
@@ -149,7 +149,7 @@ get_task_info (CORE_ADDR task_struct, process_t ** ps,
   size_t size;
   unsigned char *task_name;
   int i = 0;
-  int lwp = 0;
+  int pid = 0;
   ptid_t this_ptid;
 
   while (*ps && (*ps)->valid)
@@ -196,7 +196,7 @@ get_task_info (CORE_ADDR task_struct, process_t ** ps,
       read_memory (task_struct, lkd_private.string_buf, size);
 
       l_ps->task_struct = task_struct;
-      lwp = extract_unsigned_field (lkd_private.string_buf, task_struct, pid);
+      pid = extract_unsigned_field (lkd_private.string_buf, task_struct, pid);
       l_ps->mm = extract_pointer_field (lkd_private.string_buf,
 					task_struct, mm);
       l_ps->active_mm = extract_pointer_field (lkd_private.string_buf,
@@ -229,22 +229,22 @@ get_task_info (CORE_ADDR task_struct, process_t ** ps,
       long core_mapped = core + 1;
 
       /* swapper[core] */
-      gdb_assert (lwp==0);
+      gdb_assert (pid==0);
 
-      this_ptid = ptid_build (ptid_get_pid(inferior_ptid), lwp /* == 0 */ , core_mapped);
+      this_ptid = lkd_ptid_build (ptid_get_pid(inferior_ptid), pid /* == 0 */ , core_mapped);
       l_ps->gdb_thread =
 	iterate_over_threads (find_thread_swapper, &core_mapped);
     }
   else
     {
-      this_ptid = ptid_build (ptid_get_pid(inferior_ptid), lwp, CORE_INVAL);
-      l_ps->gdb_thread = iterate_over_threads (find_thread_lwp, &lwp);
+      this_ptid = lkd_ptid_build (ptid_get_pid(inferior_ptid), pid, CORE_INVAL);
+      l_ps->gdb_thread = iterate_over_threads (find_thread_lkd_pid, &pid);
 
       /*reset the thread core value, if existing */
       if (l_ps->gdb_thread)
 	{
 	  gdb_assert (!l_ps->gdb_thread->priv);
-	  PTID_OF (l_ps).tid = CORE_INVAL;
+	  LKD_PTID_SET_CORE(PTID_OF (l_ps), CORE_INVAL);
 	}
     }
 
@@ -257,13 +257,13 @@ get_task_info (CORE_ADDR task_struct, process_t ** ps,
     {
       if (DEBUG_DOMAIN (TASK))
 	{
-	  /*sanity check : go through the list and check if lwp already there */
+	  /*sanity check : go through the list and check if pid is already there */
 	  process_t *tps = process_list;
 
 	  while (tps && (tps)->valid)
 	    {
-	      if (lwp && (tps)->gdb_thread
-		  && (ptid_get_lwp (PTID_OF (tps)) == lwp))
+	      if (pid && (tps)->gdb_thread
+		  && (lkd_ptid_to_pid (PTID_OF (tps)) == pid))
 		gdb_assert (0);
 	      tps = tps->next;
 	    };
@@ -279,8 +279,8 @@ get_task_info (CORE_ADDR task_struct, process_t ** ps,
    * and this also tell is the gdb_thread is pruned or not!*/
   l_ps->gdb_thread->priv = (struct private_thread_info *)l_ps;
 
-  DEBUG (TASK, 1, "gdb_thread->lwp %ld <=> ps %p\n",
-		  ptid_get_lwp(PTID_OF (*ps)), ps);
+  DEBUG (TASK, 1, "gdb_thread->pid %ld <=> ps %p\n",
+		  lkd_ptid_to_pid(PTID_OF (*ps)), ps);
 
   /* the process list freeing is not handled thanks to
    * this `private` facility, yet.
@@ -338,7 +338,7 @@ lkd_proc_get_running (int core)
 	       * the swapper of an secondary SMP core.
 	       */
 	      current =
-		lkd_proc_get_by_ptid (ptid_build
+		lkd_proc_get_by_ptid (lkd_ptid_build
 				      (ptid_get_pid(inferior_ptid),
 				      0, core + 1));
 	      gdb_assert(current);
@@ -350,7 +350,7 @@ lkd_proc_get_running (int core)
 	      /* update the thread's tid in thread_list if it exists and wasn't scheduled
 	       * so that tid makes sense for both the gdbserver and infrun.c
 	       **/
-	      PTID_OF (current).tid = core + 1;
+	      LKD_PTID_SET_CORE(PTID_OF (current), core + 1 );
 	    }
 
 	  current->core = core;	/* was CORE_INVAL */
@@ -431,7 +431,7 @@ get_list_helper (process_t ** ps)
           get_task_info (t, ps, core /*zero-based */ );
           core = CORE_INVAL;
 
-          if (ptid_get_lwp (PTID_OF (*ps)) == 0)
+          if (lkd_ptid_to_pid(PTID_OF (*ps)) == 0)
             {
               /* this is init_task, let's insert the other cores swapper now */
               int i;
@@ -445,7 +445,7 @@ get_list_helper (process_t ** ps)
             }
 
            DEBUG (TASK, 2, "Got task info for %s (%li)\n",
-              (*ps)->comm, ptid_get_lwp (PTID_OF (*ps)));
+              (*ps)->comm, lkd_ptid_to_pid (PTID_OF (*ps)));
 
           ps = &((*ps)->next);
 
@@ -495,16 +495,16 @@ process_t *
 lkd_proc_get_by_ptid (ptid_t ptid)
 {
   struct thread_info *tp;
-  long lwp = ptid_get_lwp(ptid);
+  long pid = lkd_ptid_to_pid(ptid);
   process_t *ps;
 
   gdb_assert(!lkd_private.proc_list_invalid);
 
-  if (lwp)
-	  /*non-swapper, ignore TID */
-	  tp = iterate_over_threads (find_thread_lwp, &lwp);
+  if (pid)
+	  /*non-swapper, ignore Core */
+	  tp = iterate_over_threads (find_thread_lkd_pid, &pid);
   else
-	  /*swapper, TID gives the core, lwp = 0 is not unique */
+	  /*swapper, core is set in PTID, pid = 0 is not unique */
 	  tp = find_thread_ptid(ptid);
 
   ps = (process_t *)tp->priv;
@@ -833,10 +833,10 @@ lkd_proc_refresh_info (int cur_core)
   ps = process_list;
   while (ps && ps->valid)
     {
-      if (ptid_get_tid(ps->old_ptid) != ptid_get_tid(PTID_OF (ps)))
+      if (lkd_ptid_to_core(ps->old_ptid) != lkd_ptid_to_core(PTID_OF (ps)))
 	{
 	  observer_notify_thread_ptid_changed (ps->old_ptid, PTID_OF (ps));
-	  ps->old_ptid.tid = ptid_get_tid(PTID_OF (ps));
+	  LKD_PTID_SET_CORE(ps->old_ptid, lkd_ptid_to_core(PTID_OF (ps)));
 	}
       ps = ps->next;
     }

@@ -394,6 +394,34 @@ struct field_info
 /*cleanup macro to compare an address to a bp loc value*/
 #define IS_LOC(pc,evnt)  ((evnt != NULL) && (pc == evnt->loc->address))
 
+/*
+ * Mapping GDB PTID to Linux PID and Core
+ *
+ * GDB Remote uses LWP to store the effective cpu core
+ *  ptid.pid = Inferior PID
+ *  ptid.lwp = CPU Core
+ *  ptid.tid = 0
+ *
+ * STMC Debug remove uses TID to store this.
+ *  ptid.pid = Inferior PID
+ *  ptid.lwp = Process ID
+ *  ptid.tid = CPU Core (-1 for not running)
+ *
+ * This current naming, could cause some confusion between the inferior
+ * PID and the Linux PID stored, but for now I'm going to accept that, until
+ * I come up with a better name
+ */
+
+// First match the existing system : (Then we'll swap)
+#define lkd_ptid_build(inferior_pid, process, core) ptid_build(inferior_pid, process, core)
+
+#define lkd_ptid_to_core(ptid) ptid_get_tid(ptid)
+#define lkd_ptid_to_pid(ptid) ptid_get_lwp(ptid)
+
+#define LKD_PTID_SET_CORE(ptid, core) do { ptid.tid = core; } while (0)
+#define LKD_PTID_SET_PID(ptid, pid) do { ptid.lwp = pid; } while (0)
+
+
 enum page_status
 {
   PAGE_PRESENT,

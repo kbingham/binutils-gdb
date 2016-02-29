@@ -647,7 +647,7 @@ linux_aware_pid_to_str (struct target_ops *ops, ptid_t ptid)
       return normal_pid_to_str (ptid);	/* GDB default */
     }
 
-  if (!ptid_get_tid (ptid))	/* when quitting typically */
+  if (!lkd_ptid_to_core (ptid))	/* when quitting typically */
     return "Linux Kernel";
 
   tp = find_thread_ptid (ptid);
@@ -711,12 +711,12 @@ extra_thread_info_ext (struct thread_info *thread)
 	}
       else
 	{
-	  if (ps->tgid == ptid_get_lwp (PTID_OF (ps)))
+	  if (ps->tgid == lkd_ptid_to_pid (PTID_OF (ps)))
 	    /* thread group leader */
 	    pos += sprintf (pos, "TGID:%i", ps->tgid);
 	  else
 	    /* thread of a thread group */
-	    pos += sprintf (pos, "|----%li", ptid_get_lwp (PTID_OF (ps)));
+	    pos += sprintf (pos, "|----%li", lkd_ptid_to_pid (PTID_OF (ps)));
 	}
 
       if (lkd_proc_is_curr_task (ps))
@@ -755,7 +755,7 @@ linux_aware_extra_thread_info (struct target_ops *ops,
 	      char *pos = msg;
 
 	      pos += sprintf (pos, "pid: %li tgid: %i",
-			      ptid_get_lwp (PTID_OF (ps)), ps->tgid);
+			      lkd_ptid_to_pid (PTID_OF (ps)), ps->tgid);
 	      if (lkd_proc_is_curr_task (ps))
 		sprintf (pos, " <C%u>", ps->core);
 
@@ -916,7 +916,7 @@ linux_aware_wait (struct target_ops *ops,
 
   stop_ptid = BENEATH->to_wait (ops, ptid, status, opts);
   if (max_cores > 1)
-    stop_core = ptid_get_tid (stop_ptid) - 1;
+    stop_core = lkd_ptid_to_core (stop_ptid) - 1;
   else
     stop_core = 0;
 
@@ -2018,7 +2018,7 @@ linux_awareness_target_thread_changed (ptid_t ptid)
 
   if (ptid_equal (ptid, null_ptid) || ptid_equal (ptid, minus_one_ptid))
     target_thread_ptid = null_ptid;
-  else if (ptid_get_tid (ptid) != CORE_INVAL)
+  else if (lkd_ptid_to_core (ptid) != CORE_INVAL)
     target_thread_ptid = ptid;
 }
 
@@ -2027,7 +2027,7 @@ linux_aware_target_core (void)
 {
   gdb_assert (!ptid_equal (target_thread_ptid, null_ptid));
 
-  return ptid_get_tid (target_thread_ptid) - 1;
+  return lkd_ptid_to_core (target_thread_ptid) - 1;
 }
 
 /* -Wmissing-prototypes */
