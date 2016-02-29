@@ -1866,12 +1866,21 @@ linux_awareness_check (void)
     && HAS_FIELD (task_struct, comm)
     && HAS_FIELD (thread_info, preempt_count);
 
+  /* Only check through these as an attempted load
+   * Failure to lookup these symbols could mean we are
+   * on a kernel without these files configured */
+  linux_awareness_lookup_symtab ("mmap.c");
+  linux_awareness_lookup_symtab ("fork.c");
+  linux_awareness_lookup_symtab ("block_dev.c");
+  linux_awareness_lookup_symtab ("page_alloc.c");
+  linux_awareness_lookup_symtab ("vmalloc.c");
+
   /* load some data that GDB seems to loose otherwise */
-  if (check && linux_awareness_lookup_symtab ("mmap.c")
-      && linux_awareness_lookup_symtab ("fork.c")
-      && linux_awareness_lookup_symtab ("block_dev.c")
-      && linux_awareness_lookup_symtab ("vmalloc.c")
-      && linux_awareness_lookup_symtab ("page_alloc.c")
+  if (check
+      && linux_awareness_lookup_symtab ("cpu.c")
+      && linux_awareness_lookup_symtab ("panic.c")
+      && linux_awareness_lookup_symtab ("user.c")
+      && linux_awareness_lookup_symtab ("sys.c")
       && linux_awareness_ops->lo_check_kernel ())
     lkd_private.kflags |= KFLAG_DBGINFO;
   else
