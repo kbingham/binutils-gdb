@@ -44,8 +44,6 @@
 #define BENEATH linux_aware_ops.beneath
 
 /* Declaration of the required addresses. */
-DECLARE_ADDR (swapper_pg_dir);
-DECLARE_ADDR (init_thread_union);
 DECLARE_ADDR (init_task);
 
 DECLARE_ADDR (init_pid_ns);
@@ -62,36 +60,17 @@ DECLARE_FIELD (rq, curr);
 DECLARE_FIELD (rq, idle);
 DECLARE_FIELD (rq, lock);
 DECLARE_FIELD (raw_spinlock, magic);
-
 DECLARE_FIELD (list_head, next);
 
-
 DECLARE_FIELD (task_struct, active_mm);
-DECLARE_FIELD (mnt_namespace, list);
- /**/ DECLARE_FIELD (path, dentry);
- /**/ DECLARE_FIELD (task_struct, mm);
+DECLARE_FIELD (task_struct, mm);
 DECLARE_FIELD (task_struct, tasks);
-DECLARE_FIELD (task_struct, children);
 DECLARE_FIELD (task_struct, thread_group);
-DECLARE_FIELD (task_struct, sibling);
 DECLARE_FIELD (task_struct, pid);
 DECLARE_FIELD (task_struct, tgid);
-DECLARE_FIELD (task_struct, namespace);
-DECLARE_FIELD (task_struct, nsproxy);
 DECLARE_FIELD (task_struct, prio);
-DECLARE_FIELD (task_struct, cred);
 DECLARE_FIELD (task_struct, comm);	/* far offset in the task_struct, to bulk-read everything needed. */
 
-
- /**/ DECLARE_FIELD (thread_info, preempt_count);
-DECLARE_FIELD (vm_area_struct, vm_next);
-DECLARE_FIELD (vm_area_struct, vm_file);
-DECLARE_FIELD (vm_area_struct, vm_flags);
-DECLARE_FIELD (vm_area_struct, vm_start);
-DECLARE_FIELD (vm_area_struct, vm_end);
-DECLARE_FIELD (vm_area_struct, vm_pgoff);
-DECLARE_FIELD (vm_struct, next);
-DECLARE_FIELD (vm_struct, size);
 
 /* The current task. */
 
