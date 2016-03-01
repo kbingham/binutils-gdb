@@ -723,7 +723,7 @@ ALL_TARGET_OBS = \
 	linux-record.o \
 	ravenscar-thread.o \
 	lkd-main.o lkd-process.o \
-	lkd-arm.o
+	lkd-arm.o lkd-aarch64.o
 
 # Host-dependent makefile fragment comes in here.
 @host_makefile_frag@
@@ -2730,6 +2730,7 @@ lkd-main.o: $(srcdir)/lkd/lkd-main.c $(srcdir)/lkd/lkd.h
 lkd-process.o: $(srcdir)/lkd/lkd-process.c $(srcdir)/lkd/lkd.h
 
 lkd-arm.o: $(srcdir)/lkd/lkd-arm.c $(srcdir)/lkd/lkd.h
+lkd-aarch64.o: $(srcdir)/lkd/lkd-aarch64.c $(srcdir)/lkd/lkd.h
 
 # Generalised lkd-compile rule
 lkd-%:
