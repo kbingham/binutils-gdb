@@ -591,7 +591,7 @@ void
 lkd_reset_thread_list (void)
 {
   struct thread_info *tp = NULL;
-  int pid = ptid_get_pid (inferior_ptid);
+  int inferior_pid = ptid_get_pid (inferior_ptid);
   int loaded_state = lkd_private.loaded;
   struct cleanup *cleanup;
 
@@ -618,7 +618,7 @@ lkd_reset_thread_list (void)
   if (DEBUG_DOMAIN (D_INIT))
     iterate_over_threads (dump_thread_list, NULL);
 
-  tp = any_live_thread_of_process (pid);
+  tp = any_live_thread_of_process (inferior_pid);
   gdb_assert (tp != NULL);	/* A live thread must exist.  */
   switch_to_thread (tp->ptid);
 
