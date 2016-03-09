@@ -173,8 +173,7 @@ DECLARE_FIELD (new_utsname, release);
 
 
 DECLARE_FIELD (pid_namespace, last_pid);
-DECLARE_FIELD (qstr, len);
-DECLARE_FIELD (qstr, name);
+
 
 DECLARE_FIELD (task_struct, mm);
 DECLARE_FIELD (task_struct, tasks);
@@ -2031,7 +2030,7 @@ linux_awareness_target_thread_changed (ptid_t ptid)
     target_thread_ptid = ptid;
 }
 
-int
+int /* Unused Function */
 linux_aware_target_core (void)
 {
   gdb_assert (!ptid_equal (target_thread_ptid, null_ptid));
