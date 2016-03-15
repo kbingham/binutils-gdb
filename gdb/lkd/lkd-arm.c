@@ -37,9 +37,25 @@
 #include "lkd-process.h"
 
 /* Addresses used by the ARM specific linux awareness. */
+DECLARE_ADDR (start_kernel);
+DECLARE_ADDR (secondary_start_kernel);
+DECLARE_ADDR (kernel_thread_exit);
+DECLARE_ADDR (do_exit);
 
 DECLARE_ADDR (ret_from_fork);
 DECLARE_ADDR (ret_fast_syscall);
+DECLARE_ADDR (ret_slow_syscall);
+DECLARE_ADDR (ret_from_exception);
+
+DECLARE_ADDR (__dabt_svc);
+DECLARE_ADDR (__irq_svc);
+DECLARE_ADDR (__und_svc);
+DECLARE_ADDR (__pabt_svc);
+DECLARE_ADDR (__dabt_usr);
+DECLARE_ADDR (__irq_usr);
+DECLARE_ADDR (__und_usr);
+DECLARE_ADDR (__pabt_usr);
+DECLARE_ADDR (__und_usr_unknown);
 
 /* Fields used by the ARM specific linux awareness. */
 DECLARE_FIELD (mm_struct, pgd);
@@ -54,6 +70,65 @@ struct pt_regs
   uint32_t uregs[18];
 };
 
+/******************************************************************
+ * (Architecture specific) kernel `main`: end-of-backtrace sniffer
+ ******************************************************************/
+
+static enum unwind_stop_reason
+kmain_frame_unwind_stop_reason (struct frame_info *this_frame,
+				void **this_cache)
+{
+  return UNWIND_OUTERMOST;
+}
+
+static void
+kmain_frame_this_id (struct frame_info *next_frame, void **this_cache,
+		     struct frame_id *this_id)
+{
+  *this_id =
+    frame_id_build (get_frame_sp (next_frame), get_frame_pc (next_frame));
+}
+
+/* cause backtracing to stop on any `main` entrypoints for the kernel.
+ */
+static int
+kmain_frame_sniffer (const struct frame_unwind *self,
+		     struct frame_info *next_frame, void **this_cache)
+{
+  CORE_ADDR ker = ADDR (start_kernel);
+  CORE_ADDR xit = ADDR (do_exit);
+
+  CORE_ADDR fnc = get_frame_func (next_frame);
+  CORE_ADDR pc = get_frame_pc (next_frame);
+
+#define PC_OR_FNC_IS(addr)	((pc == addr) || (fnc == addr))
+
+  if (PC_OR_FNC_IS (ker) || PC_OR_FNC_IS (xit))
+    return 1;
+
+  if ((HAS_ADDR (kernel_thread_exit))
+      && PC_OR_FNC_IS (ADDR (kernel_thread_exit)))
+    return 1;
+
+  if ((HAS_ADDR (secondary_start_kernel))
+      && PC_OR_FNC_IS (ADDR (secondary_start_kernel)))
+    return 1;
+
+#undef PC_OR_FNC_IS
+
+  return 0;
+}
+
+static const struct frame_unwind kmain_frame_unwind = {
+  .type = KENTRY_FRAME,
+  .stop_reason = kmain_frame_unwind_stop_reason,
+  .this_id = kmain_frame_this_id,
+  .prev_register = NULL,
+  .unwind_data = NULL,
+  .sniffer = kmain_frame_sniffer,
+  .dealloc_cache = NULL,
+  .prev_arch = NULL
+};
 static int
 arch_can_write (CORE_ADDR addr, CORE_ADDR task_struct)
 {
@@ -81,6 +156,234 @@ arch_is_kernel_address (CORE_ADDR addr)
   return !arch_is_user_address (addr) || is_special_addr (addr);
 }
 
+/*****************************************************************************/
+/*                                UNWINDERS                                  */
+/*****************************************************************************/
+
+static struct pt_regs *
+ptregs_frame_cache (struct frame_info *this_frame,
+		    void **this_cache, int offset_from_sp)
+{
+  ULONGEST sp, stack_top;
+  CORE_ADDR regs_addr;
+  struct pt_regs *regs;
+  uint32_t *my_regs;
+  int i;
+
+  if (*this_cache)
+    return *this_cache;
+
+  sp = get_frame_register_unsigned (this_frame, ARM_SP_REGNUM);
+  regs_addr = sp + offset_from_sp;
+
+  *this_cache = FRAME_OBSTACK_ZALLOC (struct pt_regs);
+  regs = *this_cache;
+  memset (regs, 0, sizeof (struct pt_regs));
+
+  i = 0;
+
+  my_regs = (uint32_t *) regs;
+  while (i < sizeof (struct pt_regs) / sizeof (uint32_t))
+    {
+      *my_regs = read_memory_unsigned_integer (regs_addr, 4, LKD_BYTE_ORDER);
+      regs_addr += 4;
+      ++my_regs;
+      ++i;
+    }
+
+  return regs;
+}
+
+/* Unwinder callback that builds a frame_id representing THIS_FRAME in
+   THIS_ID. THIS_CACHE points to the cache for THIS_FRAME. */
+static void
+exception_frame_this_id (struct frame_info *next_frame, void **this_cache,
+			 struct frame_id *this_id)
+{
+  *this_id =
+    frame_id_build (get_frame_sp (next_frame), get_frame_pc (next_frame));
+}
+
+#define EXCEPTION_FRAME_OFFSET_TO_SP	0
+
+static struct value *
+exception_frame_prev_register (struct frame_info
+			       *this_frame, void **this_cache, int regnum)
+{
+  struct pt_regs *cache = ptregs_frame_cache (this_frame, this_cache,
+					      EXCEPTION_FRAME_OFFSET_TO_SP);
+  gdb_byte buf[4];
+  int val = -1;
+
+  if (!cache)
+    error ("Can't unwind exception frame.");
+
+  switch (regnum)
+    {
+    case 0:
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+    case 5:
+    case 6:
+    case 7:
+    case 8:
+    case 9:
+    case 10:
+    case 11:
+    case 12:
+    case 13:
+    case 14:
+    case 15:
+      val = cache->uregs[regnum];
+      break;
+    case ARM_PS_REGNUM:
+      val = cache->uregs[16];
+      break;
+    default:
+      return frame_unwind_got_optimized (this_frame, regnum);
+    }
+
+  DEBUG (FRAME, 1, "e_f_p_r(%d)[%02x] = %x\n",
+	 frame_relative_level (this_frame), regnum, (unsigned int) val);
+
+  store_unsigned_integer (buf, 4, LKD_BYTE_ORDER, (unsigned int) val);
+  return frame_unwind_got_bytes (this_frame, regnum, buf);
+}
+
+static int
+exception_frame_sniffer (const struct frame_unwind *self,
+			 struct frame_info *next_frame, void **this_cache)
+{
+  CORE_ADDR func = get_frame_func (next_frame);
+  CORE_ADDR pc = get_frame_pc (next_frame);
+
+  if ((HAS_ADDR (__dabt_svc) && func == ADDR (__dabt_svc))
+      || (HAS_ADDR (__irq_svc) && func == ADDR (__irq_svc))
+      || (HAS_ADDR (__pabt_svc) && func == ADDR (__pabt_svc))
+      || (HAS_ADDR (__und_svc) && func == ADDR (__und_svc))
+      || (HAS_ADDR (__dabt_usr) && func == ADDR (__dabt_usr))
+      || (HAS_ADDR (__irq_usr) && func == ADDR (__irq_usr))
+      || (HAS_ADDR (__pabt_usr) && func == ADDR (__pabt_usr))
+      || (HAS_ADDR (__und_usr) && func == ADDR (__und_usr))
+      || (HAS_ADDR (ret_from_exception) && pc == ADDR (ret_from_exception))
+      || (HAS_ADDR (__und_usr_unknown) && pc == ADDR (__und_usr_unknown)))
+    {
+      return 1;
+    }
+
+  return 0;
+}
+
+static const struct frame_unwind exception_frame_unwind = {
+  .type = SIGTRAMP_FRAME,
+  .stop_reason = default_frame_unwind_stop_reason,
+  .this_id = exception_frame_this_id,
+  .prev_register = exception_frame_prev_register,
+  .unwind_data = NULL,
+  .sniffer = exception_frame_sniffer,
+  .dealloc_cache = NULL,
+  .prev_arch = NULL
+};
+
+//---- from entry-header.S---------------------------------------
+//@
+//@ Most of the stack format comes from struct pt_regs, but with
+//@ the addition of 8 bytes for storing syscall args 5 and 6.
+//@ This _must_ remain a multiple of 8 for EABI.
+//@
+#define S_OFF		8
+
+static void
+syscall_frame_this_id (struct frame_info *this_frame, void **this_cache,
+		       struct frame_id *this_id)
+{
+  struct pt_regs *cache = ptregs_frame_cache (this_frame, this_cache, S_OFF);
+
+  *this_id =
+    frame_id_build (get_frame_sp (this_frame), get_frame_func (this_frame));
+}
+
+static struct value *
+syscall_frame_prev_register (struct frame_info *this_frame,
+			     void **this_cache, int regnum)
+{
+  struct pt_regs *cache = ptregs_frame_cache (this_frame, this_cache, S_OFF);
+  gdb_byte buf[4];
+  int val = -1;
+
+  if (!cache)
+    error ("Can't unwind syscall frame.");
+
+  switch (regnum)
+    {
+    case 0:
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+    case 5:
+    case 6:
+    case 7:
+    case 8:
+    case 9:
+    case 10:
+    case 11:
+    case 12:
+    case 13:
+    case 14:
+    case 15:
+      val = cache->uregs[regnum];
+      break;
+    case ARM_PS_REGNUM:
+      val = cache->uregs[16];
+      break;
+    default:
+      return frame_unwind_got_optimized (this_frame, regnum);
+    }
+
+  DEBUG (FRAME, 1, "s_f_p_r(%d)[%02x] = %x\n",
+	 frame_relative_level (this_frame), regnum, (unsigned int) val);
+
+  store_unsigned_integer (buf, 4, LKD_BYTE_ORDER, (unsigned int) val);
+  return frame_unwind_got_bytes (this_frame, regnum, buf);
+}
+
+static int
+syscall_frame_sniffer (const struct frame_unwind *self,
+		       struct frame_info *next_frame, void **this_cache)
+{
+  CORE_ADDR func = get_frame_pc (next_frame);
+
+  int test_ret = ((HAS_ADDR (ret_from_fork) && func == ADDR (ret_from_fork))
+		  || (HAS_ADDR (ret_fast_syscall)
+		      && func == ADDR (ret_fast_syscall))
+		  || (HAS_ADDR (ret_slow_syscall)
+		      && func == ADDR (ret_slow_syscall)));
+
+
+  if (test_ret)
+    {
+      DEBUG (FRAME, 1, "F(%d):syscall_frame_sniffer\n",
+	     frame_relative_level (next_frame));
+      return 1;
+    }
+
+  return 0;
+}
+
+/* Structure defining the unwinder for syscalls. */
+static const struct frame_unwind syscall_frame_unwind = {
+  .type = KENTRY_FRAME,
+  .stop_reason = default_frame_unwind_stop_reason,
+  .this_id = syscall_frame_this_id,
+  .prev_register = syscall_frame_prev_register,
+  .unwind_data = NULL,
+  .sniffer = syscall_frame_sniffer,
+  .dealloc_cache = NULL,
+  .prev_arch = NULL
+};
 
 /*****************************************************************************/
 /*                              TASK AWARENESS                               */
@@ -258,6 +561,9 @@ arch_post_load (char *prog, int fromtty)
 
   /* this installs what ever LKD specific handling is required
    * in the gdb arch data. */
+  frame_unwind_prepend_unwinder (target_gdbarch (), &exception_frame_unwind);
+  frame_unwind_prepend_unwinder (target_gdbarch (), &syscall_frame_unwind);
+  frame_unwind_prepend_unwinder (target_gdbarch (), &kmain_frame_unwind);
 
   /* lkd_params.loaded will be set later */
 }
