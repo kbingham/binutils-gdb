@@ -228,6 +228,8 @@ get_task_info (CORE_ADDR task_struct, process_t ** ps,
       this_ptid = lkd_ptid_build (ptid_get_pid(inferior_ptid), core_mapped, pid /* == 0 */);
       l_ps->gdb_thread =
 	iterate_over_threads (find_thread_swapper, &core_mapped);
+
+      DEBUG(TASK, 2, "Building %s, found gdbthread @ 0x%p\n", ptid_to_str(this_ptid), l_ps->gdb_thread);
     }
   else
     {
@@ -271,7 +273,14 @@ get_task_info (CORE_ADDR task_struct, process_t ** ps,
   /* forcibly update the private fields, as some thread may
    * already have been created without, like hw threads.
    * and this also tell is the gdb_thread is pruned or not!*/
-  l_ps->gdb_thread->priv = (struct private_thread_info *)l_ps;
+  if (l_ps->gdb_thread->priv != (struct private_thread_info *)l_ps)
+    {
+
+      DEBUG (TASK, 1, "******** Updating Thread Private from %p to l_ps (%p) *******\n",
+	     l_ps->gdb_thread->priv, l_ps);
+
+      l_ps->gdb_thread->priv = (struct private_thread_info *)l_ps;
+    }
 
   DEBUG (TASK, 1, "gdb_thread->pid %ld <=> ps %p\n",
 		  lkd_ptid_to_pid(PTID_OF (*ps)), ps);
@@ -344,7 +353,11 @@ lkd_proc_get_running (int core)
 	      /* update the thread's tid in thread_list if it exists and wasn't scheduled
 	       * so that tid makes sense for both the gdbserver and infrun.c
 	       **/
+	      DEBUG(TASK, 2, "Setting Core on PTID(%s)\n", ptid_to_str(PTID_OF(current)));
 	      LKD_PTID_SET_CORE(PTID_OF (current), core + 1 );
+
+	      DEBUG(TASK, 2, "***** Now it's PTID(%s)\n", ptid_to_str(PTID_OF(current)));
+	      // Observer thread updated????
 	    }
 
 	  current->core = core;	/* was CORE_INVAL */
