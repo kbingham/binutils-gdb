@@ -231,13 +231,13 @@ get_task_info (CORE_ADDR task_struct, process_t ** ps,
       /* swapper[core] */
       gdb_assert (pid==0);
 
-      this_ptid = lkd_ptid_build (ptid_get_pid(inferior_ptid), pid /* == 0 */ , core_mapped);
+      this_ptid = lkd_ptid_build (ptid_get_pid(inferior_ptid), core_mapped, pid /* == 0 */);
       l_ps->gdb_thread =
 	iterate_over_threads (find_thread_swapper, &core_mapped);
     }
   else
     {
-      this_ptid = lkd_ptid_build (ptid_get_pid(inferior_ptid), pid, CORE_INVAL);
+      this_ptid = lkd_ptid_build (ptid_get_pid(inferior_ptid), CORE_INVAL, pid);
       l_ps->gdb_thread = iterate_over_threads (find_thread_lkd_pid, &pid);
 
       /*reset the thread core value, if existing */
@@ -339,8 +339,8 @@ lkd_proc_get_running (int core)
 	       */
 	      current =
 		lkd_proc_get_by_ptid (lkd_ptid_build
-				      (ptid_get_pid(inferior_ptid),
-				      0, core + 1));
+					(ptid_get_pid(inferior_ptid),
+					 core + 1, 0));
 	      gdb_assert(current);
 
 	      current->task_struct = task;

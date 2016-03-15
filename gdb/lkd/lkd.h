@@ -402,7 +402,7 @@ struct field_info
  *  ptid.lwp = CPU Core
  *  ptid.tid = 0
  *
- * STMC Debug remove uses TID to store this.
+ * STMC Debug remote uses TID to store the core.
  *  ptid.pid = Inferior PID
  *  ptid.lwp = Process ID
  *  ptid.tid = CPU Core (-1 for not running)
@@ -410,12 +410,14 @@ struct field_info
  * This current naming, could cause some confusion between the inferior
  * PID and the Linux PID stored, but for now I'm going to accept that, until
  * I come up with a better name
+ *
+ * These macro's provide a level of indirection through the uses of LKD
+ * accessing PTID structures. This allows clear identification of the aim
+ * of function reading from the structure, and provides a single place to
+ * swap usage if testing with an STMC in the short term.
  */
 
-// lkd_ptid_build swaps the usage of lwp/tid.
-// This is an intermediate stage before changing the order of the parameters
-// We may want to keep the indirect macro though to support STMC conversion process.
-#define lkd_ptid_build(inferior_pid, process, core) ptid_build(inferior_pid, core, process)
+#define lkd_ptid_build(inferior_pid, core, process) ptid_build(inferior_pid, core, process)
 
 #define lkd_ptid_to_core(ptid) ptid_get_lwp(ptid)
 #define lkd_ptid_to_pid(ptid) ptid_get_tid(ptid)
