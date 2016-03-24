@@ -302,6 +302,11 @@ py_target_to_extra_thread_info (struct target_ops *ops, struct thread_info *info
     struct cleanup *cleanup;
     cleanup = ensure_python_env (target_gdbarch (), current_language);
 
+    if (!PyObject_HasAttrString(self, "to_extra_thread_info"))
+    {
+    	printf_filtered("No to_extra_thread_info : Calling below!\n");
+    }
+
     HasMethodOrReturnBeneath(self, to_extra_thread_info, ops, info);
 
     do_cleanups(cleanup);
