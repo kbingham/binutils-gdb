@@ -69,6 +69,23 @@ extern PyTypeObject target_object_type
 #define ENTRY() {} while(0)
 #define EXIT() {} while(0)
 
+static void
+exhibit_function(void * arg)
+{
+    int * lock = arg;
+    (*lock)--;
+}
+
+static struct cleanup *
+inhibit_function(int * lock)
+{
+    (*lock)++;
+
+    return make_cleanup(exhibit_function, lock);
+}
+
+
+
 /* Large spacing between sections during development for clear divisions */
 
 /*****************************************************************************
@@ -303,9 +320,20 @@ py_target_to_update_thread_list (struct target_ops *ops)
 
   struct cleanup *cleanup;
 
+  /* Re-entrancy lock to ensure that Python code requesting thread list
+   * does not re-call itself in an infinite loop.
+   */
+  static int lock = 0;
+  if (lock)
+	  return;
+
   cleanup = ensure_python_env (target_gdbarch (), current_language);
 
   HasMethodOrReturnBeneath (self, to_update_thread_list, ops);
+
+  /* Prevent re-entrancy on this function.
+   * Lock will be released by a cleanup action */
+  inhibit_function(&lock);
 
   callback = PyObject_GetAttrString (self, "to_update_thread_list");
   if (!callback)
@@ -456,8 +484,16 @@ static void py_target_to_fetch_registers (struct target_ops *ops,
 
   struct cleanup *cleanup;
 
+  static int lock = 0;
+  if (lock)
+	  return;
+
   cleanup = ensure_python_env (target_gdbarch (), current_language);
   HasMethodOrReturnBeneath (self, to_fetch_registers, ops, regcache, reg);
+
+  /* Prevent re-entrancy on this function.
+   * Lock will be released by a cleanup action */
+  inhibit_function(&lock);
 
   callback = PyObject_GetAttrString (self, "to_fetch_registers");
   if (!callback)
