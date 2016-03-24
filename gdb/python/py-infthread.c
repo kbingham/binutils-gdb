@@ -467,6 +467,28 @@ gdbpy_initialize_thread (void)
 				 (PyObject *) &thread_object_type);
 }
 
+static int
+thpy_sq_contains(PyObject *seq, PyObject *object)
+{
+	printf_unfiltered("Checking if %p contains %p\n", seq, object);
+	return 0;
+}
+
+static PySequenceMethods thpy_sequence =
+{
+  0, 					/*sq_length*/
+  0, 					/*sq_concat*/
+  0, 					/*sq_repeat*/
+  0, 					/*sq_item*/
+  0, 					/*sq_slice*/
+  0, 					/*sq_ass_item*/
+  0, 					/*sq_ass_slice*/
+  thpy_sq_contains,			/*sq_contains*/
+  /* Added in release 2.0 */
+  0, 					/*sq_inplace_concat*/
+  0, 					/*sq_inplace_repeat*/
+};
+
 static PyGetSetDef thread_object_getset[] =
 {
   { "name", thpy_get_name, thpy_set_name,
@@ -520,7 +542,7 @@ PyTypeObject thread_object_type =
   thpy_compare,			  /*tp_compare*/
   0,				  /*tp_repr*/
   0,				  /*tp_as_number*/
-  0,				  /*tp_as_sequence*/
+  &thpy_sequence,		  /*tp_as_sequence*/
   0,				  /*tp_as_mapping*/
   0,				  /*tp_hash */
   0,				  /*tp_call*/
@@ -528,7 +550,7 @@ PyTypeObject thread_object_type =
   0,				  /*tp_getattro*/
   0,				  /*tp_setattro*/
   0,				  /*tp_as_buffer*/
-  Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_ITER,  /*tp_flags*/
+  Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_ITER | Py_TPFLAGS_HAVE_SEQUENCE_IN,  /*tp_flags*/
   "GDB thread object",		  /* tp_doc */
   0,				  /* tp_traverse */
   0,				  /* tp_clear */
