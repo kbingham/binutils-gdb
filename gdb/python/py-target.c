@@ -686,12 +686,6 @@ error:
   return ret;
 }
 
-static int
-default_true (struct target_ops *ops)
-{
-    return 1;
-}
-
 static void py_target_register_ops(struct target_ops * ops)
 {
     if (!ops->to_shortname)
@@ -720,7 +714,6 @@ static void py_target_register_ops(struct target_ops * ops)
     ops->to_has_memory = default_child_has_memory;
     ops->to_has_stack = default_child_has_stack;
     ops->to_has_registers = default_child_has_registers;
-    default_true(ops);
 
     ops->to_magic = OPS_MAGIC;
 
