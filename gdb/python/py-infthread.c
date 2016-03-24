@@ -117,6 +117,28 @@ thpy_get_name (PyObject *self, void *ignore)
   return PyString_FromString (name);
 }
 
+/* Called by the Python interpreter to obtain string representation
+   of the PendingFrame object.  */
+
+static PyObject *
+thpy_str (PyObject *self)
+{
+  thread_object *thread_obj = (thread_object *) self;
+  const char *name;
+  ptid_t ptid;
+
+  if (thread_obj == NULL || thread_obj->thread == NULL)
+    return PyString_FromString ("Stale Thread Object instance");
+
+  name = thread_obj->thread->name;
+  if (name == NULL)
+    name = target_thread_name (thread_obj->thread);
+
+  ptid = thread_obj->thread->ptid;
+
+  return PyString_FromFormat ("[%s:%d-%ld-%ld]", name, ptid.pid, ptid.lwp, ptid.tid);
+}
+
 static int
 thpy_set_name (PyObject *self, PyObject *newvalue, void *ignore)
 {
@@ -546,7 +568,7 @@ PyTypeObject thread_object_type =
   0,				  /*tp_as_mapping*/
   0,				  /*tp_hash */
   0,				  /*tp_call*/
-  0,				  /*tp_str*/
+  thpy_str,			  /*tp_str*/
   0,				  /*tp_getattro*/
   0,				  /*tp_setattro*/
   0,				  /*tp_as_buffer*/
