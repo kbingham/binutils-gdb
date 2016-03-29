@@ -887,6 +887,9 @@ create_static_range_type (struct type *result_type, struct type *index_type,
   high.kind = PROP_CONST;
   high.data.const_val = high_bound;
 
+  if (high_bound == 163)
+    printf_unfiltered("In create static range type with 163\n");
+
   result_type = create_range_type (result_type, index_type, &low, &high);
 
   return result_type;
@@ -916,6 +919,7 @@ get_discrete_bounds (struct type *type, LONGEST *lowp, LONGEST *highp)
     case TYPE_CODE_RANGE:
       *lowp = TYPE_LOW_BOUND (type);
       *highp = TYPE_HIGH_BOUND (type);
+      printf_unfiltered("Read highp as %ld\n", *highp);
       return 1;
     case TYPE_CODE_ENUM:
       if (TYPE_NFIELDS (type) > 0)

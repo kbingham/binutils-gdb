@@ -251,7 +251,11 @@ dwarf2_frame_state_copy_regs (struct dwarf2_frame_state_reg_info *rs)
   struct dwarf2_frame_state_reg *reg;
 
   reg = (struct dwarf2_frame_state_reg *) xmalloc (size);
-  memcpy (reg, rs->reg, size);
+
+  if (!rs->reg)
+    printf_unfiltered("Found a Null Value Pointer!\n");
+  else
+    memcpy (reg, rs->reg, size);
 
   return reg;
 }

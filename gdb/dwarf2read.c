@@ -14949,6 +14949,8 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
   high.kind = PROP_CONST;
   high.data.const_val = 0;
 
+  printf_unfiltered("high.data.const_val set to 0\n");
+
   /* Set LOW_DEFAULT_IS_VALID if current language and DWARF version allow
      omitting DW_AT_lower_bound.  */
   switch (cu->language)
@@ -15077,6 +15079,11 @@ read_subrange_type (struct die_info *die, struct dwarf2_cu *cu)
 
   /* set_die_type should be already done.  */
   set_descriptive_type (range_type, die, cu);
+  /* Print high.data.const_val here ... */
+  printf_unfiltered("High data value %ld\n", high.data.const_val);
+
+  if (high.data.const_val == 163)
+    printf_unfiltered("Val is 163 .. .you might want to have a look at 0x%p\n", &high);
 
   return range_type;
 }
